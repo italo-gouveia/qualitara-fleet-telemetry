@@ -1,0 +1,94 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+
+.app { min-height: 100vh; }
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.app-header h1 { font-size: 1.25rem; }
+
+.live-badge { color: #22c55e; font-size: 0.875rem; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.dashboard { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+
+.fleet-summary {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+}
+.fleet-summary h2 { margin-bottom: 0.75rem; font-size: 1rem; color: #94a3b8; }
+
+.status-tiles { display: flex; gap: 1rem; flex-wrap: wrap; }
+.status-tile {
+  border: 2px solid;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  min-width: 80px;
+  text-align: center;
+}
+.tile-count { display: block; font-size: 1.75rem; font-weight: 700; }
+.tile-label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; }
+
+.panels { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+@media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+
+.panel {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  overflow: auto;
+}
+.panel h2 { margin-bottom: 0.75rem; font-size: 1rem; color: #94a3b8; }
+
+.vehicle-table, .zone-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.vehicle-table th, .vehicle-table td,
+.zone-table th, .zone-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #334155;
+}
+.vehicle-table th, .zone-table th { color: #64748b; font-weight: 500; }
+.row-fault td { background: rgba(239,68,68,0.08); }
+.zone-high td { color: #fbbf24; }
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.badge-slate  { background: #475569; color: #e2e8f0; }
+.badge-blue   { background: #1d4ed8; color: #bfdbfe; }
+.badge-green  { background: #15803d; color: #bbf7d0; }
+.badge-red    { background: #b91c1c; color: #fecaca; }
+.badge-orange { background: #92400e; color: #fde68a; }
+
+.battery-bar {
+  display: inline-block;
+  width: 60px;
+  height: 8px;
+  background: #334155;
+  border-radius: 4px;
+  overflow: hidden;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.battery-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+
+.coord { font-size: 0.75rem; color: #64748b; }
+.error { color: #ef4444; }
