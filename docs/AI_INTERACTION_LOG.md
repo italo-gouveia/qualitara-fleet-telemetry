@@ -867,6 +867,45 @@ None — first attempt passed ruff, mypy, and all 60 tests.
 
 ---
 
+---
+
+## Interaction 22 — Prompt 22: GitHub Actions CI + README Observability Documentation
+
+### Prompt issued
+
+> Add .github/workflows/ci.yml with backend (pytest/ruff/mypy) and frontend (npm build/tsc) jobs triggered on push and PR to main. Document Prometheus alert rules and states in README. Both deliverables in one commit.
+
+### Output summary
+
+**`.github/workflows/ci.yml`** — two parallel jobs on `ubuntu-latest`:
+- `backend`: `actions/setup-python@v5` (3.12, pip cache), installs `requirements.txt` + `requirements-dev.txt`, runs `pytest -v`, `ruff check`, `mypy`
+- `frontend`: `actions/setup-node@v4` (Node 20, npm cache), runs `npm ci`, `npm run build`, `tsc --noEmit`
+
+Concurrency group `ci-${{ github.ref }}` with `cancel-in-progress: true` — stale runs on the same branch are cancelled automatically.
+
+**README — Prometheus alert rules section** added to Observability:
+- Table of 3 rules (HighErrorRate, HighP95Latency, BackendDown) with condition, severity, and `for` window
+- URL table: `localhost:9090/alerts` (live state) and `localhost:9090/rules` (loaded rule files)
+- Explanation of alert state transitions: `inactive` → `pending` → `firing`
+- Note that all alerts stay `inactive` under normal Locust load (healthy system)
+
+### Corrections and redirections
+
+None — first attempt clean.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `.github/workflows/ci.yml` with backend + frontend jobs | ✅ |
+| pytest / ruff / mypy in backend job | ✅ |
+| npm ci / npm run build / tsc in frontend job | ✅ |
+| Concurrency group cancels stale runs | ✅ |
+| README Prometheus alerts section | ✅ |
+| `pytest -v` locally | ✅ 60 passed (no app code changed) |
+
+---
+
 ### Post-interaction fix — Grafana datasource UID mismatch
 
 **Bug:** After running the full stack with `--profile load-test`, all 4 Grafana panels showed "No data" with warning triangles. Prometheus was scraping correctly (`health: up`, last scrape confirmed via API) and metrics existed (`http_requests_total`, `http_request_duration_seconds_bucket`). Root cause: the `${DS_PROMETHEUS}` template variable in `fleet.json` is an **import-time substitution** mechanism (for UI imports) — it is NOT resolved by the Grafana filesystem provisioner. The datasource YAML had no fixed `uid`, so Grafana auto-generated `PBFA97CFB590B2093`; the dashboard panels referenced `${DS_PROMETHEUS}` which remained unresolved, causing all queries to fail silently.

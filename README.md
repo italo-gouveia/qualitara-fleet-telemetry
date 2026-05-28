@@ -177,10 +177,31 @@ Full analysis in [docs/ADR.md § What Would Change at 10× Scale](docs/ADR.md).
 - `/health` liveness + DB readiness endpoint (503 when PostgreSQL is unreachable)
 - `GET /metrics` — Prometheus text format via `prometheus-fastapi-instrumentator` (`http_requests_total`, `http_request_duration_seconds`)
 - **Prometheus** scrapes `/metrics` every 15 s; **Grafana** auto-provisions the datasource and a Fleet dashboard (request rate, p95 latency, 5xx error rate, requests by status)
+- **Prometheus alert rules** defined in `prometheus/alerts.yml` — evaluated every 30 s
+
+### Prometheus alert rules
+
+| Alert | Condition | Severity | `for` |
+|-------|-----------|----------|-------|
+| `HighErrorRate` | `sum(rate(http_requests_total{status=~"5.."}[5m])) > 0.05` | critical | 1 m |
+| `HighP95Latency` | `histogram_quantile(0.95, …) > 1.0 s` | warning | 2 m |
+| `BackendDown` | `up{job="fleet-backend"} == 0` | critical | 30 s |
+
+**Where to inspect alerts while the stack is running:**
+
+| URL | What you see |
+|-----|-------------|
+| http://localhost:9090/alerts | Live alert state: `inactive` / `pending` / `firing` |
+| http://localhost:9090/rules | Loaded rule files — confirms `alerts.yml` parsed correctly |
+
+With the Locust load test running at ~14 RPS and 0 errors all three alerts stay **inactive** (healthy system). Alert state transitions:
+- **`inactive`** → condition not met
+- **`pending`** → condition met, counting down the `for:` window
+- **`firing`** → condition held for the full window; would notify a configured receiver (PagerDuty, Slack, etc.)
 
 **Natural next additions for production:**
+- Alertmanager with a notification receiver (Slack / PagerDuty) wired to the firing alerts
 - **OpenTelemetry** tracing through the `router → service → repository` chain
-- **Alerting** on anomaly rate, ingest lag (`p95 > 200 ms`), and zone counter stall
 
 ## Non-Goals
 
