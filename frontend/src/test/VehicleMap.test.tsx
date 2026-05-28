@@ -19,6 +19,8 @@ vi.mock("react-leaflet", () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="tooltip">{children}</div>
   ),
+  // FitBounds helper uses useMap — stub it with a no-op fitBounds
+  useMap: () => ({ fitBounds: vi.fn() }),
 }));
 
 vi.mock("leaflet/dist/leaflet.css", () => ({}));
