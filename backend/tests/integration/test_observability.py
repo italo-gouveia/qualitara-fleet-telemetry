@@ -72,3 +72,28 @@ async def test_health_returns_ok_when_db_is_up(client: AsyncClient) -> None:
     response = await client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_health_returns_503_when_db_is_unreachable() -> None:
+    """Health endpoint must return 503 {"status": "unavailable"} when the DB execute fails.
+
+    Simulates a broken DB connection by overriding the session dependency with a mock
+    whose execute() raises an OSError (connection refused / timeout scenario).
+    """
+    mock_session = AsyncMock(spec=AsyncSession)
+    mock_session.execute.side_effect = OSError("DB connection refused")
+
+    async def _broken_db() -> AsyncGenerator[AsyncSession, None]:
+        yield mock_session
+
+    app.dependency_overrides[get_session] = _broken_db
+    try:
+        transport = ASGITransport(app=app, raise_app_exceptions=False)  # type: ignore[arg-type]
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.get("/health")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "unavailable"}

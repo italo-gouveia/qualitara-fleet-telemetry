@@ -75,6 +75,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/ADR.md`: Decision 4 added (frontend testing pyramid: unit/integration/E2E strategy and rationale); stale "Docker Compose omitted" entry removed
 - README: stack table and Run Tests section updated for full test pyramid and 3-job CI
 
+#### AnomaliesPanel and test coverage — Prompts 26–27
+- `frontend/src/components/AnomaliesPanel.tsx`: full-width fleet-wide anomalies section below the vehicles/zones grid; columns: vehicle ID (monospace), type badge (badge-red for critical/fault, badge-orange for low battery/speed/error), detected (relative time); count badge in heading; empty and error states
+- `frontend/src/hooks/useAnomalies.ts`: fleet-wide hook (no vehicleId), polls at 5 s, `queryKey: ["anomalies"]`
+- `frontend/src/App.tsx`: `<AnomaliesPanel />` wired below the panels grid
+- `frontend/src/App.css`: `.panel-count`, `.anomaly-table`, `.anomaly-vehicle`, `.anomaly-empty` styles
+- `frontend/src/api/anomalies.ts`: fleet-wide `limit` lowered from `"50"` to `"20"`
+- `frontend/src/test/AnomaliesPanel.test.tsx`: 6 unit tests (loading, error, empty, rows, count badge, badge-red)
+- `frontend/src/test/mocks/handlers.ts`: updated `/anomalies` handler with 3 realistic anomaly objects
+- `frontend/src/test/integration/Dashboard.integration.test.tsx`: 4 new `AnomaliesPanel (integration)` tests with MSW + real QueryClient
+- `frontend/e2e/fleet-dashboard.spec.ts`: 4 new E2E scenarios (empty state, heading+count, rows+labels, badge-red) — 7 → 11 scenarios
+- `frontend/Dockerfile`: copy `.npmrc` alongside `package*.json` before `npm ci` — fixes `legacy-peer-deps` not being active inside the container (same npm 10 vs 11 peer-dep issue as CI)
+- Backend: 11 new integration tests covering previously untested paths — 60 → 71 tests:
+  - `zone_entered=None` does not increment any counter
+  - Single event with 4 triggered rules creates 4 anomaly rows
+  - `PATCH /{id}/status` for `idle`, `moving`, `charging` updates the DB row (parametrized ×3)
+  - Missions: `limit`, `offset`, newest-first ordering
+  - Maintenance records: `limit`, newest-first ordering
+  - `GET /health` returns 503 when DB is unreachable (mocked session)
+- `README.md`: corrected "Three key decisions" → 9 decisions; updated test counts
+
 #### npm ci peer-dep fix — Interaction 27
 - `frontend/.npmrc`: `legacy-peer-deps=true` — aligns npm 10.x (CI / Node 22) with npm 11.x (local / Node 24) for optional peer dep resolution; fixes "Missing: esbuild@0.28.0 from lock file" on `npm ci`
 - `frontend/package.json`: `@testing-library/dom@^10.4.0` added as explicit `devDependency` — required because `legacy-peer-deps` mode stops auto-installing packages marked `"peer": true` in the lock file

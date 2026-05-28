@@ -47,9 +47,9 @@ Real-time monitoring service for 50 autonomous industrial vehicles emitting tele
 | Logging | `python-json-logger` — structured JSON in prod, text in dev; `X-Request-Id` propagation |
 | Metrics | `prometheus-fastapi-instrumentator` → Prometheus → Grafana (auto-provisioned) |
 | Database | PostgreSQL 16 (production / Docker) · SQLite + aiosqlite (tests) |
-| Frontend | React 18, TypeScript, Vite, TanStack Query v5 |
-| Tests (backend) | pytest-asyncio, httpx ASGITransport — 60 tests |
-| Tests (frontend) | Vitest + Testing Library (unit + MSW integration) — 29 tests; Playwright E2E (Chromium) — 7 scenarios |
+| Frontend | React 18, TypeScript, Vite, TanStack Query v5 — Fleet summary, Vehicle list, Zone counts, **Anomalies panel** |
+| Tests (backend) | pytest-asyncio, httpx ASGITransport — **71 tests** |
+| Tests (frontend) | Vitest + Testing Library (unit + MSW integration) — **39 tests**; Playwright E2E (Chromium) — **11 scenarios** |
 | Container | Docker Compose · full stack + optional Locust load-test profile |
 | CI | GitHub Actions — 3 parallel jobs: backend (pytest/ruff/mypy), frontend (vitest/build/tsc), e2e (Playwright) |
 
@@ -130,15 +130,15 @@ npm run dev
 
 ```bash
 cd backend
-pytest -v        # 60 tests: unit + integration (in-memory SQLite)
+pytest -v        # 71 tests: unit + integration (in-memory SQLite)
 ruff check .     # linting
 mypy app/        # type checking
 ```
 
 ```bash
 cd frontend
-npm test               # Vitest — 29 unit + integration tests (MSW)
-npm run test:e2e       # Playwright — 7 E2E scenarios (Chromium, API mocked)
+npm test               # Vitest — 39 unit + integration tests (MSW)
+npm run test:e2e       # Playwright — 11 E2E scenarios (Chromium, API mocked)
 npm run test:coverage  # Vitest with V8 coverage report
 ```
 
@@ -235,11 +235,17 @@ Explicitly out of scope — not oversights:
 
 ## Architecture Decisions
 
-Three key decisions with full context, trade-offs, and scale analysis:
+Nine decisions documented with full context, trade-offs, and scale analysis:
 
 1. **PostgreSQL + SQLite dev fallback** — atomicity requirements (`SELECT FOR UPDATE`, atomic `UPDATE`)
 2. **2 s polling over WebSocket** — TanStack Query handles stale-while-revalidate with zero extra infrastructure
 3. **Synchronous in-process anomaly detection** — same-transaction insert, extensible rule list, microsecond evaluation
+4. **Frontend testing pyramid** — unit (vi.mock) → integration (MSW) → E2E (Playwright + `page.route()`)
+5. **Async Python stack** — FastAPI + SQLAlchemy 2.x async + asyncpg; single event loop handles 50 concurrent ingest requests
+6. **Router → service → repository layering** — SRP per layer; each layer independently testable
+7. **Observability stack** — `python-json-logger` + Prometheus + Grafana filesystem provisioner (hardcoded datasource UID lesson)
+8. **Docker Compose health checks and idempotent migrations** — `condition: service_healthy`; Alembic as sole schema owner
+9. **API contract** — RESTful resources, consistent `limit`/`offset` pagination, unified `{"detail": ...}` error shape
 
 → [docs/ADR.md](docs/ADR.md)
 

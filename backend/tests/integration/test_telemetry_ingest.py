@@ -9,6 +9,8 @@ from app.models.vehicle import VehicleState
 from app.models.zone import ZoneCount
 from tests.helpers import make_event
 
+EXPECTED_ZONE_COUNT = 20  # all zone rows in the seeded DB
+
 
 @pytest.mark.asyncio
 async def test_ingest_valid_event_returns_201(client: AsyncClient) -> None:
@@ -92,3 +94,48 @@ async def test_ingest_persists_telemetry_event_row(
     row = result.scalar_one()
     assert row.vehicle_id == "v-persist"
     assert row.speed_mps == 2.5
+
+
+@pytest.mark.asyncio
+async def test_ingest_zone_entered_none_does_not_increment_any_counter(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """An event with zone_entered=None must not modify any zone counter row."""
+    before = await db_session.execute(select(ZoneCount))
+    counts_before = {row.zone_id: row.entry_count for row in before.scalars().all()}
+
+    await client.post("/telemetry", json=make_event(vehicle_id="v-nozone", zone_entered=None))
+
+    db_session.expire_all()
+    after = await db_session.execute(select(ZoneCount))
+    counts_after = {row.zone_id: row.entry_count for row in after.scalars().all()}
+
+    assert counts_before == counts_after
+
+
+@pytest.mark.asyncio
+async def test_ingest_multiple_anomalies_single_event(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """An event violating multiple rules creates one anomaly row per triggered rule.
+
+    battery_pct=3  →  low_battery + critical_battery
+    status=fault   →  fault_entered
+    error_codes    →  error_code_reported
+    Total: 4 anomalies
+    """
+    payload = make_event(
+        vehicle_id="v-multi-anomaly",
+        battery_pct=3,
+        status="fault",
+        error_codes=["E001"],
+    )
+    response = await client.post("/telemetry", json=payload)
+    assert response.status_code == 201
+    assert response.json()["anomalies_detected"] == 4
+
+    result = await db_session.execute(
+        select(Anomaly).where(Anomaly.vehicle_id == "v-multi-anomaly")
+    )
+    types = {a.type for a in result.scalars().all()}
+    assert types == {"low_battery", "critical_battery", "fault_entered", "error_code_reported"}

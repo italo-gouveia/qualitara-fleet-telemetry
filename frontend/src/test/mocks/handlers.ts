@@ -32,5 +32,29 @@ export const handlers = [
     HttpResponse.json({ aisle_a: 5, charging_bay_1: 12, pack_station: 3 }),
   ),
 
-  http.get(`${BASE}/anomalies`, () => HttpResponse.json([])),
+  http.get(`${BASE}/anomalies`, () =>
+    HttpResponse.json([
+      {
+        id: 1,
+        vehicle_id: 'v-02',
+        type: 'fault_entered',
+        detected_at: new Date(Date.now() - 30_000).toISOString(),
+        detail: {},
+      },
+      {
+        id: 2,
+        vehicle_id: 'v-01',
+        type: 'low_battery',
+        detected_at: new Date(Date.now() - 120_000).toISOString(),
+        detail: { battery_pct: 12 },
+      },
+      {
+        id: 3,
+        vehicle_id: 'v-03',
+        type: 'critical_battery',
+        detected_at: new Date(Date.now() - 300_000).toISOString(),
+        detail: { battery_pct: 3 },
+      },
+    ]),
+  ),
 ]

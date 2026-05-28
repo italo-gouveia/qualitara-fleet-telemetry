@@ -25,6 +25,23 @@ const VEHICLES = [
 
 const ZONES = { aisle_a: 5, charging_bay_1: 20, pack_station: 2 }
 
+const ANOMALIES = [
+  {
+    id: 1,
+    vehicle_id: 'v-02',
+    type: 'fault_entered',
+    detected_at: new Date(Date.now() - 30_000).toISOString(),
+    detail: {},
+  },
+  {
+    id: 2,
+    vehicle_id: 'v-01',
+    type: 'low_battery',
+    detected_at: new Date(Date.now() - 120_000).toISOString(),
+    detail: { battery_pct: 12 },
+  },
+]
+
 test.beforeEach(async ({ page }) => {
   // Mock all API endpoints — no real backend required
   await page.route(`${API}/fleet/state`, route => route.fulfill({ json: FLEET_STATE }))
@@ -86,4 +103,39 @@ test('fleet summary status tile counts match mocked data', async ({ page }) => {
   await expect(tiles.filter({ hasText: 'moving' })).toContainText('5')
   await expect(tiles.filter({ hasText: 'charging' })).toContainText('3')
   await expect(tiles.filter({ hasText: 'fault' })).toContainText('2')
+})
+
+// ─── AnomaliesPanel ───────────────────────────────────────────────────────────
+
+test('anomalies panel shows empty state when no anomalies', async ({ page }) => {
+  // beforeEach already routes anomalies** → []
+  await page.goto('/')
+  await expect(page.getByText(/no anomalies detected/i)).toBeVisible()
+})
+
+test('anomalies panel heading and count badge are visible when anomalies present', async ({ page }) => {
+  await page.route(`${API}/anomalies**`, route => route.fulfill({ json: ANOMALIES }))
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: /recent anomalies/i })).toBeVisible()
+  await expect(page.locator('.panel-count')).toContainText('2')
+})
+
+test('anomaly rows render vehicle IDs and human-readable type labels', async ({ page }) => {
+  await page.route(`${API}/anomalies**`, route => route.fulfill({ json: ANOMALIES }))
+  await page.goto('/')
+  await expect(page.locator('.anomaly-table')).toBeVisible()
+  // vehicle IDs in monospace cells
+  const vehicleCells = page.locator('.anomaly-vehicle')
+  await expect(vehicleCells.first()).toContainText('v-02')
+  // type badges — underscores replaced with spaces
+  await expect(page.getByText('fault entered')).toBeVisible()
+  await expect(page.getByText('low battery')).toBeVisible()
+})
+
+test('fault_entered and critical anomaly badges use badge-red class', async ({ page }) => {
+  await page.route(`${API}/anomalies**`, route => route.fulfill({ json: ANOMALIES }))
+  await page.goto('/')
+  const redBadge = page.locator('.anomaly-table .badge-red').first()
+  await expect(redBadge).toBeVisible()
+  await expect(redBadge).toContainText('fault entered')
 })

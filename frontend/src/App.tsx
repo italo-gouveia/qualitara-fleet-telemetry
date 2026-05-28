@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { FleetSummary } from "./components/FleetSummary";
 import { VehicleList } from "./components/VehicleList";
 import { ZoneCountsPanel } from "./components/ZoneCountsPanel";
+import { AnomaliesPanel } from "./components/AnomaliesPanel";
 import "./App.css";
 
 const queryClient = new QueryClient();
@@ -20,6 +21,7 @@ export default function App() {
             <VehicleList />
             <ZoneCountsPanel />
           </div>
+          <AnomaliesPanel />
         </main>
       </div>
     </QueryClientProvider>

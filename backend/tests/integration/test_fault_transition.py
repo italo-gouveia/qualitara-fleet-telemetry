@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -192,3 +192,144 @@ async def test_get_vehicle_maintenance_not_found_returns_404(
 ) -> None:
     response = await client.get("/vehicles/v-no-such/maintenance")
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# PATCH status — non-fault paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("new_status", ["idle", "moving", "charging"])
+async def test_patch_non_fault_status_updates_vehicle_row(
+    client: AsyncClient, db_session: AsyncSession, new_status: str
+) -> None:
+    """PATCH to any non-fault status must update the DB row and return the new status."""
+    vid = f"v-nonfault-{new_status}"
+    await _seed_vehicle(db_session, vid)
+    await db_session.commit()
+
+    response = await client.patch(f"/vehicles/{vid}/status", json={"status": new_status})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == new_status
+    assert body["mission_cancelled"] is False
+    assert body["maintenance_record_id"] is None
+
+    db_session.expire_all()
+    result = await db_session.execute(
+        select(VehicleState).where(VehicleState.vehicle_id == vid)
+    )
+    assert result.scalar_one().status == new_status
+
+
+# ---------------------------------------------------------------------------
+# Missions — pagination and ordering
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_missions_pagination_limit(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """limit param must cap the number of missions returned."""
+    vid = "v-missions-pag-limit"
+    await _seed_vehicle(db_session, vid)
+    for _ in range(3):
+        await _seed_active_mission(db_session, vid)
+    await db_session.commit()
+
+    response = await client.get(f"/vehicles/{vid}/missions?limit=2")
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_missions_pagination_offset(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """offset param must skip the first N missions."""
+    vid = "v-miss-pag-off"
+    await _seed_vehicle(db_session, vid)
+    for _ in range(3):
+        await _seed_active_mission(db_session, vid)
+    await db_session.commit()
+
+    response = await client.get(f"/vehicles/{vid}/missions?offset=2")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_missions_ordered_newest_first(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Missions must be returned newest-first (descending created_at)."""
+    vid = "v-missions-ordered"
+    await _seed_vehicle(db_session, vid)
+    early = Mission(vehicle_id=vid, status="active", created_at=datetime(2026, 1, 1, tzinfo=UTC))
+    late = Mission(vehicle_id=vid, status="active", created_at=datetime(2026, 6, 1, tzinfo=UTC))
+    db_session.add(early)
+    db_session.add(late)
+    await db_session.commit()
+
+    response = await client.get(f"/vehicles/{vid}/missions")
+    assert response.status_code == 200
+    missions = response.json()
+    assert len(missions) == 2
+    assert missions[0]["created_at"] > missions[1]["created_at"]
+
+
+# ---------------------------------------------------------------------------
+# Maintenance records — pagination and ordering
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_maintenance_pagination_limit(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """limit param must cap the number of maintenance records returned."""
+    vid = "v-maint-pag-limit"
+    await _seed_vehicle(db_session, vid)
+    mission_ids = [await _seed_active_mission(db_session, vid) for _ in range(3)]
+    for mid in mission_ids:
+        db_session.add(
+            MaintenanceRecord(
+                vehicle_id=vid,
+                mission_id=mid,
+                created_at=datetime.now(UTC),
+                reason="fault_transition",
+            )
+        )
+    await db_session.commit()
+
+    response = await client.get(f"/vehicles/{vid}/maintenance?limit=2")
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_maintenance_ordered_newest_first(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Maintenance records must be returned newest-first (descending created_at)."""
+    vid = "v-maint-ordered"
+    await _seed_vehicle(db_session, vid)
+    mission_ids = [await _seed_active_mission(db_session, vid) for _ in range(2)]
+    for i, mid in enumerate(mission_ids):
+        db_session.add(
+            MaintenanceRecord(
+                vehicle_id=vid,
+                mission_id=mid,
+                created_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=i),
+                reason="fault_transition",
+            )
+        )
+    await db_session.commit()
+
+    response = await client.get(f"/vehicles/{vid}/maintenance")
+    assert response.status_code == 200
+    records = response.json()
+    assert len(records) == 2
+    assert records[0]["created_at"] > records[1]["created_at"]

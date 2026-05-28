@@ -1293,3 +1293,83 @@ Ensures `@testing-library/dom` is always installed directly, regardless of peer 
 | `npm test` — 29 tests pass after `npm ci` | ✅ |
 | `npm run build` succeeds | ✅ |
 | `npx tsc --noEmit` clean | ✅ |
+
+---
+
+## Interaction 28 — Prompt 26: Backend Test Gap Coverage
+
+### Prompt issued
+
+> Run a general audit of the backend test suite and fill all untested paths: non-fault PATCH status update, missions/maintenance pagination and ordering, zone counter not incremented on null zone, multi-anomaly single event, and health 503 on DB failure.
+
+### What was added
+
+**`backend/tests/integration/test_telemetry_ingest.py`** — 2 new tests:
+- `test_ingest_zone_entered_none_does_not_increment_any_counter` — snapshot all zone counts before ingest, verify no row changed after an event with `zone_entered=None`
+- `test_ingest_multiple_anomalies_single_event` — `battery_pct=3` + `status=fault` + `error_codes=["E001"]` triggers `low_battery`, `critical_battery`, `fault_entered`, `error_code_reported`; response body `anomalies_detected==4`, DB rows verified with a set comparison
+
+**`backend/tests/integration/test_fault_transition.py`** — 8 new tests:
+- `test_patch_non_fault_status_updates_vehicle_row[idle/moving/charging]` (parametrized ×3) — verifies the `vehicle_states` DB row is updated and response contains no side-effects
+- `test_get_vehicle_missions_pagination_limit` — limit=2 on 3 seeded missions
+- `test_get_vehicle_missions_pagination_offset` — offset=2 on 3 seeded missions (vehicle ID kept ≤20 chars after a 422 caught during development)
+- `test_get_vehicle_missions_ordered_newest_first` — seeds 2 missions with distinct `created_at`; asserts `missions[0].created_at > missions[1].created_at`
+- `test_get_vehicle_maintenance_pagination_limit` — directly seeds `MaintenanceRecord` rows, asserts limit respected
+- `test_get_vehicle_maintenance_ordered_newest_first` — seeds records with `timedelta(days=i)` offsets
+
+**`backend/tests/integration/test_observability.py`** — 1 new test:
+- `test_health_returns_503_when_db_is_unreachable` — overrides `get_session` with an `AsyncMock` where `execute` raises `OSError`; asserts 503 + `{"status": "unavailable"}`
+
+### Bug caught during development
+
+`test_get_vehicle_missions_pagination_offset` initially used `vid = "v-missions-pag-offset"` (21 characters), which was rejected by `Path(max_length=20)` with a 422. The test itself validated the path validation contract.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `pytest tests/ -q` | ✅ 71 passed |
+| `ruff check app/ tests/` | ✅ clean |
+| `mypy app/ --ignore-missing-imports` | ✅ clean |
+
+---
+
+## Interaction 29 — Prompt 27: AnomaliesPanel and Full Test Coverage
+
+### Prompt issued
+
+> Add a dedicated anomalies section to the React dashboard as a full-width panel below the vehicles/zones grid. The GET /anomalies endpoint exists but the dashboard only shows per-vehicle badges. Create the component, hook, CSS, and full unit/integration/E2E coverage.
+
+### What was built
+
+**`frontend/src/hooks/useAnomalies.ts`** (new)
+Fleet-wide hook: no `vehicleId` param, `queryKey: ["anomalies"]`, polls at 5 s.
+
+**`frontend/src/components/AnomaliesPanel.tsx`** (new)
+Full-width panel with three columns: Vehicle ID (monospace), Type (badge), Detected (relative time function — no library, pure JS `Date.now()` arithmetic). Badge colour map: `critical_battery`/`fault_entered` → `badge-red`; `low_battery`/`speed_anomaly`/`error_code_reported` → `badge-orange`. Count badge `.panel-count` in the heading. Empty and error states consistent with other panels.
+
+**`frontend/src/App.tsx`** — `<AnomaliesPanel />` added below the panels grid.
+
+**`frontend/src/App.css`** — `.panel-count`, `.anomaly-table`, `.anomaly-vehicle`, `.anomaly-empty` styles.
+
+**`frontend/Dockerfile`** — `COPY package*.json .npmrc ./` — `.npmrc` must be present before `npm ci` inside the container; without it, Docker's npm 10.x fails with the same esbuild peer-dep mismatch as CI.
+
+### Tests added
+
+**Unit (6 new, `AnomaliesPanel.test.tsx`):** loading, error, empty, rows (vehicle IDs + underscored type labels), count badge, `badge-red` on critical type.
+
+**MSW integration (4 new in `Dashboard.integration.test.tsx`):** loading→rows, count badge, empty state via `server.use()` override, 500 error state.
+
+**E2E (4 new in `fleet-dashboard.spec.ts`):** empty state (beforeEach returns `[]`), heading+count badge, vehicle IDs + `fault entered`/`low battery` labels, `.badge-red` on fault anomaly.
+
+**`src/test/mocks/handlers.ts`** — `/anomalies` handler updated from `[]` to 3 realistic anomaly objects so integration and E2E tests exercise non-trivial rendering.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `npm test` — unit + integration | ✅ 39 passed |
+| `npm run test:e2e` | ✅ 11 passed |
+| `npx tsc --noEmit` | ✅ clean |
+| `npm run build` | ✅ clean |
+| `docker compose build` | ✅ frontend image builds with `.npmrc` in place |
+| AnomaliesPanel visible in running stack | ✅ |

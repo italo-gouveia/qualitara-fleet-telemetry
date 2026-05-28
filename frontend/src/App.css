@@ -92,3 +92,29 @@ body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; 
 
 .coord { font-size: 0.75rem; color: #64748b; }
 .error { color: #ef4444; }
+
+.panel-count {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  background: #334155;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #94a3b8;
+  vertical-align: middle;
+}
+
+.anomaly-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.anomaly-table th, .anomaly-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #334155;
+}
+.anomaly-table th { color: #64748b; font-weight: 500; }
+.anomaly-vehicle { font-family: monospace; font-size: 0.8rem; color: #94a3b8; }
+.anomaly-empty { color: #64748b; font-size: 0.875rem; padding: 0.5rem 0; }
