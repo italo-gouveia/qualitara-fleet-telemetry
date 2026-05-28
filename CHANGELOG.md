@@ -119,6 +119,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Decision 8: Docker Compose health checks and idempotent migrations — `condition: service_healthy`, Python stdlib urllib, Alembic as sole schema owner
   - Decision 9: API contract (RESTful resources, consistent `limit`/`offset` pagination, `{"detail": ...}` error shape, `503` on health DB failure)
 
+#### Final roadmap update — Interaction 31
+- `README.md`: Vehicle detail drill-down row expanded to include "Locate on map" — clicking a vehicle row in the table opens a detail panel (missions + maintenance) **and** centres/highlights that vehicle's marker on the live Leaflet map; bidirectional selection between table and map noted as a follow-up Leaflet enhancement
+
 ### Changed
 
 - Frontend Docker image upgraded from `node:20-alpine` to `node:22-alpine` (Node 22 LTS); CI updated to `node-version: "22"`; `engines: { node: ">=22.0.0" }` added to `package.json`

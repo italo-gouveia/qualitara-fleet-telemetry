@@ -238,10 +238,10 @@ Identified improvements that are out of scope for the current delivery but are w
 |---|---|
 | **Sorting on the vehicle table** | Click column headers to sort by battery, status, last update |
 | **Client-side filtering on anomalies panel** | Filter by type or vehicle ID without a new API call |
-| **Vehicle detail drill-down** | Click a vehicle row → modal or side panel with full missions and maintenance history |
+| **Vehicle detail drill-down + map focus** | Click a row in the vehicle table (or a "Locate" button) → side panel or modal opens with full missions + maintenance history; simultaneously centres and highlights that vehicle's marker on the live map — connects the table and the geospatial view into a single interaction |
 | **Historical time-series charts** | DB schema already stores all telemetry events; add charts for battery trend, speed over time per vehicle |
 | **WebSocket / SSE push** | Replace 2 s polling with push; realistic path: **Step 1** — FastAPI `BackgroundTasks` + WebSocket endpoint (zero new infra) → **Step 2** — Redis Pub/Sub fan-out for multi-instance deployments |
-| **Leaflet map enhancements** | Current map shows vehicle positions + anomaly rings; potential additions: zone boundary polygons, vehicle trail history, clustering at lower zoom, click-through to vehicle detail panel |
+| **Leaflet map enhancements** | Current map shows vehicle positions + anomaly rings; potential additions: zone boundary polygons, vehicle trail history, clustering at lower zoom; selecting a vehicle on the map highlights its row in the vehicle table (bidirectional selection) |
 
 ### Infrastructure and observability
 | Enhancement | Notes |
