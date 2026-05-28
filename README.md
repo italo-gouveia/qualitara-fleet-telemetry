@@ -64,11 +64,9 @@ docker compose up --build
 | API | http://localhost:8000 | FastAPI backend |
 | Swagger UI | http://localhost:8000/docs | Interactive API docs |
 | Prometheus | http://localhost:9090 | Scrapes `/metrics` every 15s |
-| Grafana | http://localhost:3000 | admin / admin — anonymous viewer enabled |
+| Grafana | http://localhost:3000 | admin / admin — datasource + dashboard auto-provisioned |
 
-To add a Grafana dashboard: **Connections → Add data source → Prometheus → URL `http://prometheus:9090`**.
-
-The backend waits for PostgreSQL's healthcheck, runs `alembic upgrade head` automatically, then starts Uvicorn. Zones are seeded on first startup via `ON CONFLICT DO NOTHING`.
+The backend waits for PostgreSQL's healthcheck, runs `alembic upgrade head` automatically, then starts Uvicorn. Zones are seeded on first startup via `ON CONFLICT DO NOTHING`. Grafana's Prometheus datasource and Fleet dashboard are provisioned automatically — open http://localhost:3000 and the panels are ready.
 
 Populate the dashboard with live data while the stack is up:
 
@@ -80,6 +78,27 @@ python backend/scripts/simulate_fleet.py
 docker compose down      # stop (data preserved)
 docker compose down -v   # stop + wipe DB volume
 ```
+
+---
+
+### Load test + metric population
+
+Start the full stack **plus** a Locust load tester:
+
+```bash
+docker compose --profile load-test up --build
+```
+
+| Service | URL | Notes |
+|---------|-----|-------|
+| Dashboard | http://localhost:5173 | React live dashboard |
+| API | http://localhost:8000 | FastAPI backend |
+| Swagger UI | http://localhost:8000/docs | Interactive API docs |
+| Prometheus | http://localhost:9090 | Scrapes `/metrics` every 15s |
+| Grafana | http://localhost:3000 | Fleet dashboard, auto-provisioned |
+| Locust | http://localhost:8089 | Load tester UI |
+
+Open http://localhost:8089 → set **Number of users** (e.g. `20`) and **Spawn rate** (e.g. `5`) → click **Start swarming**. Grafana panels will light up within ~30 seconds. The load test exercises all 7 API endpoints with realistic traffic weights, which also populates the metrics dashboards for demo purposes.
 
 ---
 
@@ -153,12 +172,13 @@ Full analysis in [docs/ADR.md § What Would Change at 10× Scale](docs/ADR.md).
 ## Observability
 
 **In this implementation:**
-- Structured logging via Python `logging` (SLF4J-style parameterized messages)
-- `/health` liveness endpoint
-- Full request tracing via Uvicorn access log + correlation-friendly vehicle/zone IDs in log lines
+- Structured JSON logging via `python-json-logger` (`LOG_FORMAT=json` in Docker; `text` for local dev); every log line carries structured `extra={}` fields
+- `X-Request-Id` header propagated through every request via `RequestLoggingMiddleware`; echoed on the response
+- `/health` liveness + DB readiness endpoint (503 when PostgreSQL is unreachable)
+- `GET /metrics` — Prometheus text format via `prometheus-fastapi-instrumentator` (`http_requests_total`, `http_request_duration_seconds`)
+- **Prometheus** scrapes `/metrics` every 15 s; **Grafana** auto-provisions the datasource and a Fleet dashboard (request rate, p95 latency, 5xx error rate, requests by status)
 
 **Natural next additions for production:**
-- **Prometheus metrics** via `prometheus-fastapi-instrumentator`: counters for ingest outcomes, histogram for upstream latency, cache hit ratio
 - **OpenTelemetry** tracing through the `router → service → repository` chain
 - **Alerting** on anomaly rate, ingest lag (`p95 > 200 ms`), and zone counter stall
 

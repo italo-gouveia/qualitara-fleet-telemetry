@@ -771,3 +771,92 @@ None — first attempt clean.
 **Bug:** On first `docker compose up --build`, Prometheus and Grafana failed to start with `dependency failed to start: container backend is unhealthy`. Root cause: the healthcheck command `curl -f http://localhost:8000/health` relied on `curl`, which is not installed in `python:3.12-slim`.
 
 **Fix (commit `fix(docker)`):** replaced the `test` with `["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]` — uses Python's stdlib `urllib`, always available in the image. Committed and pushed to `origin/main`.
+
+---
+
+## Interaction 19 — Prompt 19: Grafana Auto-Provisioning
+
+### Prompt issued
+
+> Grafana connects to Prometheus but all dashboards are empty — requires manual datasource setup every time. Add Grafana provisioning files so the datasource and a Fleet dashboard are auto-configured on container start: `grafana/provisioning/datasources/prometheus.yml`, `grafana/provisioning/dashboards/provider.yml`, and `grafana/provisioning/dashboards/fleet.json` with four panels. Mount the provisioning directory in docker-compose.
+
+### Output summary
+
+**`grafana/provisioning/datasources/prometheus.yml`** — provisions Prometheus as the default datasource pointing to `http://prometheus:9090`; `isDefault: true`, `editable: false`.
+
+**`grafana/provisioning/dashboards/provider.yml`** — tells Grafana to load dashboards from `/etc/grafana/provisioning/dashboards` (`disableDeletion: true`, `updateIntervalSeconds: 10`).
+
+**`grafana/provisioning/dashboards/fleet.json`** — Fleet Telemetry dashboard with 4 panels:
+- **Request Rate** — `rate(http_requests_total[1m])` Prometheus counter
+- **P95 Latency** — `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[1m]))`
+- **5xx Error Rate** — `rate(http_requests_total{status=~"5.."}[1m])`
+- **Requests by Status** — stacked `rate(http_requests_total[1m])` grouped by `status`
+
+Uses `${DS_PROMETHEUS}` template variable with `__inputs` block for proper provisioning-time datasource binding.
+
+**`docker-compose.yml`** — `grafana` service updated to mount `./grafana/provisioning:/etc/grafana/provisioning:ro`.
+
+**README** — removed the "manual datasource setup" instruction; noted that the datasource and dashboard are auto-provisioned.
+
+### Corrections and redirections
+
+- First attempt used `{"type": "prometheus", "uid": "prometheus"}` as a hardcoded datasource reference in `fleet.json`. Grafana provisioning requires the `${DS_PROMETHEUS}` template variable with an `__inputs` block for the datasource to bind correctly at startup. Fix: rewrote the datasource reference using `__inputs` + `${DS_PROMETHEUS}` pattern.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `grafana/provisioning/datasources/prometheus.yml` — Prometheus default datasource | ✅ |
+| `grafana/provisioning/dashboards/provider.yml` — dashboard provider config | ✅ |
+| `grafana/provisioning/dashboards/fleet.json` — 4 panels, `${DS_PROMETHEUS}` binding | ✅ |
+| `docker-compose.yml` mounts provisioning directory | ✅ |
+| `docker compose up --build` → Grafana opens with populated dashboard | ✅ |
+| `pytest -v` | ✅ 55 passed (no app code changed) |
+
+---
+
+## Interaction 20 — Prompt 20: Load Test with Locust
+
+### Prompt issued
+
+> Add Locust as an optional Docker Compose service (profile `load-test`) with a `locustfile.py` that exercises all API endpoints with realistic weights. Serves dual purpose: load test (throughput, latency, error rate) and data population (generates metric traffic so Grafana panels light up within ~30 s). `docker compose --profile load-test up --build` starts the full stack + Locust UI. Create prompt file first, then implement.
+
+### Output summary
+
+**`.claude/prompts/20-load-test-locust.md`** — prompt file created before implementation (per workflow rule).
+
+**`load-test/locustfile.py`** — `FleetApiUser(HttpUser)` with 7 tasks:
+
+| Task | Weight | Endpoint |
+|------|--------|----------|
+| `post_telemetry` | 10 | `POST /telemetry` |
+| `get_fleet_state` | 3 | `GET /fleet/state` |
+| `get_vehicles` | 2 | `GET /vehicles` |
+| `get_zone_counts` | 2 | `GET /zones/counts` |
+| `get_anomalies` | 2 | `GET /anomalies` |
+| `get_vehicle_by_id` | 2 | `GET /vehicles/{id}` |
+| `get_health` | 1 | `GET /health` |
+
+`wait_time = between(0.05, 0.3)` — aggressive enough to produce visible metrics in Grafana within 30 seconds. Uses all 50 vehicle IDs (`v-01` through `v-50`), 20 real zone names from `app/core/zones.py`, and excludes `fault` from `STATUSES` to avoid mission cancellation side-effects contaminating the dataset.
+
+**`docker-compose.yml`** — `locust` service added with `profiles: ["load-test"]`, image `locustio/locust:2.29.0`, port 8089, depends on `backend: condition: service_healthy`. Not started by the default `docker compose up`.
+
+**`Makefile`** — `load-test` target added: `docker compose --profile load-test up --build`.
+
+**`README.md`** — "Load test + metric population" section added after Quick Start with `docker compose --profile load-test up --build` command, 6-URL table including Locust at http://localhost:8089, and instructions (open Locust → set 20 users + spawn rate 5 → Start swarming → Grafana lights up in ~30 s). Observability section updated: removed stale "natural next additions" bullet for Prometheus (now implemented); updated to accurately describe the current stack.
+
+### Corrections and redirections
+
+None — first attempt clean.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `load-test/locustfile.py` — 7 tasks with correct weights | ✅ |
+| Zone names match `app/core/zones.py` (20 zones) | ✅ |
+| `fault` excluded from STATUSES | ✅ |
+| `locust` service in `docker-compose.yml` behind `load-test` profile | ✅ |
+| `make load-test` target in Makefile | ✅ |
+| README documents load-test workflow with 6-URL table | ✅ |
+| `pytest -v` | ✅ 55 passed (no app code changed) |

@@ -68,5 +68,20 @@ services:
     depends_on:
       - prometheus
 
+  locust:
+    profiles: ["load-test"]
+    image: locustio/locust:2.29.0
+    volumes:
+      - ./load-test:/mnt/locust
+    ports:
+      - "8089:8089"
+    command: >
+      -f /mnt/locust/locustfile.py
+      --host http://backend:8000
+      --web-host 0.0.0.0
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   pgdata:
