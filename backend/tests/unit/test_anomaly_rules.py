@@ -73,7 +73,9 @@ def test_fault_entered_on_fault_status() -> None:
     assert check_fault_entered(make_event(status=VehicleStatus.FAULT)) == AnomalyType.FAULT_ENTERED
 
 
-@pytest.mark.parametrize("status", [VehicleStatus.IDLE, VehicleStatus.MOVING, VehicleStatus.CHARGING])
+@pytest.mark.parametrize(
+    "status", [VehicleStatus.IDLE, VehicleStatus.MOVING, VehicleStatus.CHARGING]
+)
 def test_fault_entered_non_fault_statuses_return_none(status: VehicleStatus) -> None:
     assert check_fault_entered(make_event(status=status)) is None
 
@@ -114,7 +116,8 @@ def test_error_codes_empty_returns_none() -> None:
 
 
 def test_error_codes_multiple_codes_still_one_anomaly() -> None:
-    assert check_error_codes(make_event(error_codes=["E01", "E02", "E99"])) == AnomalyType.ERROR_CODE_REPORTED
+    result = check_error_codes(make_event(error_codes=["E01", "E02", "E99"]))
+    assert result == AnomalyType.ERROR_CODE_REPORTED
 
 
 # ---------------------------------------------------------------------------

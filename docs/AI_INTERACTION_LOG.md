@@ -676,3 +676,57 @@ Added to `app` in `main.py` before `CORSMiddleware`.
 | Integration tests for new endpoint | ✅ 2 tests |
 | `pytest -v` | ✅ 50 passed |
 | `ruff check .` / `mypy app/` | ✅ Clean (36 source files) |
+
+---
+
+## Interaction 17 — Prompt 17: Final Polish — Makefile, Prometheus, Health DB Check, .env.example, Observability Tests
+
+### Prompt issued
+
+> Seven gaps in one pass: (1) README API table missing GET /vehicles/{id} and /metrics; (2) .env.example missing LOG_FORMAT; (3) Makefile at repo root with test/lint/up/down/dev targets; (4) GET /health with real SELECT 1 DB check returning 503 on failure; (5) Prometheus metrics via prometheus-fastapi-instrumentator; (6) test for exception handler 500 shape; (7) tests for X-Request-Id propagation. Create prompt file first, then implement.
+
+### Output summary
+
+**`backend/requirements.txt`** — added `prometheus-fastapi-instrumentator>=0.9`.
+
+**`backend/.env.example`** — updated to include `LOG_FORMAT=text` with comment explaining json vs text modes.
+
+**`Makefile` at repo root** — 6 targets with inline `## help` comments:
+- `make help` (default) — lists all targets with descriptions
+- `make test` — `cd backend && python -m pytest tests/ -v`
+- `make lint` — ruff + mypy
+- `make up` — `docker compose up --build`
+- `make down` — `docker compose down`
+- `make dev` — `cd backend && fastapi dev app/main.py`
+
+**`GET /health` with DB readiness** — injects `SessionDep`; executes `SELECT 1`; returns 200 `{"status": "ok"}` on success; logs `WARNING health_check_db_unavailable` and returns 503 `{"status": "unavailable"}` on failure. Makes docker-compose healthcheck semantically meaningful.
+
+**Prometheus metrics** — `Instrumentator().instrument(app).expose(app)` in `main.py` after router registration. Exposes `GET /metrics` with `http_requests_total` and `http_request_duration_seconds` histogram.
+
+**README** — API table updated: added `GET /vehicles/{id}` row, pagination note on `GET /vehicles`, 503 note on `/health`, new `/metrics` row.
+
+**`tests/integration/test_observability.py`** (5 tests):
+- `test_unhandled_exception_returns_500_with_safe_body` — patches `app.routers.fleet.get_fleet_state` with `AsyncMock(side_effect=RuntimeError)`; uses inline client with `raise_app_exceptions=False` to receive the 500 response instead of re-raise; asserts status 500, safe body, no stack trace leaked.
+- `test_response_always_includes_request_id_header` — any GET /health response must have `x-request-id`.
+- `test_provided_request_id_is_echoed_back` — sent `X-Request-Id` must be returned verbatim.
+- `test_metrics_endpoint_returns_prometheus_format` — GET /metrics → 200, body contains `http_requests_total`.
+- `test_health_returns_ok_when_db_is_up` — GET /health → 200 `{"status": "ok"}`.
+
+### Corrections and redirections
+
+- First patch attempt used `app.services.fleet.get_fleet_state` — mock didn't intercept because the router imported the function at load time. Fix: patched `app.routers.fleet.get_fleet_state` (the binding in the router's namespace).
+- `ASGITransport` re-raises server-side exceptions by default in test mode. Fix: created inline client with `raise_app_exceptions=False` for the 500 test, while the fixture client (raise_app_exceptions=True) remains unchanged for all other tests.
+- Two ruff E501 violations in `test_anomaly_rules.py` from the previous prompt (parametrize decorator and long assert). Fixed by splitting the decorator args and extracting the assertion to a variable.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| README has `GET /vehicles/{id}`, pagination note, `/metrics` | ✅ |
+| `backend/.env.example` has all 4 settings including `LOG_FORMAT` | ✅ |
+| `Makefile` at repo root with 6 targets | ✅ |
+| `GET /health` executes `SELECT 1`, returns 503 on DB failure | ✅ |
+| `GET /metrics` returns 200 with Prometheus text format | ✅ |
+| `test_observability.py` — 5 tests (500, request-id x2, metrics, health) | ✅ |
+| `pytest -v` | ✅ 55 passed |
+| `ruff check .` / `mypy app/` | ✅ Clean (36 source files) |

@@ -2,15 +2,16 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
 from app.config import settings
 from app.core.exception_handlers import unhandled_exception_handler
 from app.core.logging_config import setup_logging
 from app.core.zones import ZONES
-from app.database import AsyncSessionLocal, engine
+from app.database import AsyncSessionLocal, SessionDep, engine
 from app.middleware.request_logging import RequestLoggingMiddleware
 from app.routers.anomaly import router as anomaly_router
 from app.routers.fleet import router as fleet_router
@@ -69,7 +70,16 @@ app.include_router(fleet_router)
 app.include_router(vehicle_router)
 app.include_router(anomaly_router)
 
+Instrumentator().instrument(app).expose(app)
+
 
 @app.get("/health", tags=["ops"])
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health(session: SessionDep, response: Response) -> dict[str, str]:
+    """Liveness + readiness probe: returns 503 if the database is unreachable."""
+    try:
+        await session.execute(text("SELECT 1"))
+        return {"status": "ok"}
+    except Exception:
+        logger.warning("health_check_db_unavailable")
+        response.status_code = 503
+        return {"status": "unavailable"}

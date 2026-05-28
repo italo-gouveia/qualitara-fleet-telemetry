@@ -113,11 +113,13 @@ mypy app/        # type checking
 |--------|------|-------------|
 | `POST` | `/telemetry` | Ingest a telemetry event (201) |
 | `GET` | `/fleet/state` | Per-status vehicle counts |
-| `GET` | `/vehicles` | All known vehicles, ordered by ID |
+| `GET` | `/vehicles` | All known vehicles, ordered by ID — `?limit=1..100&offset=0` |
+| `GET` | `/vehicles/{id}` | Single vehicle state by ID (404 if unknown) |
 | `GET` | `/zones/counts` | Entry counts for all 20 zones |
 | `GET` | `/anomalies` | Anomalies — filters: `vehicle_id`, `start`, `end`, `limit` |
 | `PATCH` | `/vehicles/{id}/status` | Update vehicle status; cancels active mission on fault |
-| `GET` | `/health` | Liveness check |
+| `GET` | `/health` | Liveness + DB readiness probe (503 if DB unreachable) |
+| `GET` | `/metrics` | Prometheus metrics (request count, latency histogram) |
 | `GET` | `/docs` | Swagger UI |
 
 ## Concurrency-Critical Paths
