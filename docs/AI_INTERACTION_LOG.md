@@ -502,3 +502,31 @@ None — first attempt passed all checks.
 - **Prompt engineering insight**: structured rule files with explicit code examples (`.claude/rules/database.md` showing the correct vs. wrong zone counter pattern) dramatically reduced correction cycles compared to freeform instructions. The `AnomalyType` wrong-import and `expire_all()` sync/async confusion were caught immediately by the lint/type pipeline, not by human review — the quality gates did their job.
 
 - **Overall**: AI generated approximately 80% of the implementation. The critical paths (concurrency, transaction boundaries, type safety) required review and two corrections during the session. The ADR, README, and test design were fully AI-generated and needed no correction. Total wall-clock time: approximately 4 hours for all 10 prompts including review and corrections.
+
+---
+
+## Interaction 13 — Prompt 13: FastAPI Idiomatic SessionDep
+
+### Prompt issued
+> Apply the official FastAPI skill (`fastapi/fastapi/.agents/skills/fastapi/SKILL.md`): introduce a `SessionDep = Annotated[AsyncSession, Depends(get_session)]` alias so all router handlers use the idiomatic `Annotated` style instead of repeating `Depends(get_session)` in each signature. Update local-dev command to `fastapi dev`.
+
+### Output summary
+
+- Added `SessionDep = Annotated[AsyncSession, Depends(get_session)]` to `app/database.py` alongside `get_session`.
+- Updated all four routers (`telemetry`, `fleet`, `vehicle`, `anomaly`) to use `session: SessionDep` — removed `AsyncSession`, `Depends`, and `get_session` imports from each router file.
+- Updated README local-dev command from `uvicorn app.main:app --reload` to `fastapi dev app/main.py`.
+
+### Corrections and redirections
+
+None — first attempt passed all checks.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `SessionDep` defined in `app/database.py` | ✅ |
+| All 4 routers use `session: SessionDep` | ✅ |
+| No router imports `Depends` or `AsyncSession` for the session dep | ✅ |
+| `pytest -v` | ✅ 23 passed |
+| `ruff check .` / `mypy app/` | ✅ All checks passed |
+| README updated to `fastapi dev` | ✅ |

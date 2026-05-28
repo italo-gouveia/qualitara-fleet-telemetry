@@ -85,7 +85,7 @@ docker compose down -v   # stop + wipe DB volume
 cd backend
 pip install -e ".[dev]"
 alembic upgrade head
-uvicorn app.main:app --reload
+fastapi dev app/main.py   # hot reload via FastAPI CLI
 # API: http://localhost:8000 · Docs: http://localhost:8000/docs
 ```
 

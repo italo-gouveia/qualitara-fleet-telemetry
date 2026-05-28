@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Annotated, Any
 
+from fastapi import Depends
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import (
@@ -31,3 +32,7 @@ def dialect_insert(model: type) -> Any:
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
+
+
+# Reusable Annotated dependency — use as `session: SessionDep` in all handlers
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
