@@ -1,8 +1,9 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.vehicle import VehicleState
+from app.models.vehicle import MaintenanceRecord, Mission, VehicleState
 from app.schemas.fleet import FleetStateResponse, VehicleStateResponse
+from app.schemas.vehicle import MaintenanceRecordResponse, MissionResponse
 
 _ALL_STATUSES = ("idle", "moving", "charging", "fault")
 
@@ -42,6 +43,50 @@ async def get_all_vehicle_states(
             updated_at=vs.updated_at,
         )
         for vs in rows.scalars()
+    ]
+
+
+async def get_missions_by_vehicle(
+    vehicle_id: str, session: AsyncSession, limit: int = 50, offset: int = 0
+) -> list[MissionResponse]:
+    rows = await session.execute(
+        select(Mission)
+        .where(Mission.vehicle_id == vehicle_id)
+        .order_by(Mission.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return [
+        MissionResponse(
+            id=m.id,
+            vehicle_id=m.vehicle_id,
+            status=m.status,
+            created_at=m.created_at,
+            cancelled_at=m.cancelled_at,
+        )
+        for m in rows.scalars()
+    ]
+
+
+async def get_maintenance_by_vehicle(
+    vehicle_id: str, session: AsyncSession, limit: int = 50, offset: int = 0
+) -> list[MaintenanceRecordResponse]:
+    rows = await session.execute(
+        select(MaintenanceRecord)
+        .where(MaintenanceRecord.vehicle_id == vehicle_id)
+        .order_by(MaintenanceRecord.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return [
+        MaintenanceRecordResponse(
+            id=r.id,
+            vehicle_id=r.vehicle_id,
+            mission_id=r.mission_id,
+            reason=r.reason,
+            created_at=r.created_at,
+        )
+        for r in rows.scalars()
     ]
 
 

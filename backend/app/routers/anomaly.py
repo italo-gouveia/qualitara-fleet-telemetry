@@ -21,7 +21,8 @@ async def list_anomalies(
     start: Annotated[datetime | None, Query()] = None,
     end: Annotated[datetime | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[AnomalyResponse]:
     return await query_anomalies(
-        session, vehicle_id=vehicle_id, start=start, end=end, limit=limit
+        session, vehicle_id=vehicle_id, start=start, end=end, limit=limit, offset=offset
     )

@@ -5,10 +5,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.vehicle import MaintenanceRecord, Mission, VehicleState
-from app.repositories.vehicle_repository import get_vehicle_by_id
+from app.repositories.vehicle_repository import (
+    get_maintenance_by_vehicle,
+    get_missions_by_vehicle,
+    get_vehicle_by_id,
+)
 from app.schemas.fleet import VehicleStateResponse
 from app.schemas.telemetry import VehicleStatus
-from app.schemas.vehicle import StatusUpdateResponse
+from app.schemas.vehicle import (
+    MaintenanceRecordResponse,
+    MissionResponse,
+    StatusUpdateResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +33,26 @@ async def get_vehicle(vehicle_id: str, session: AsyncSession) -> VehicleStateRes
     if result is None:
         raise VehicleNotFound(vehicle_id)
     return result
+
+
+async def get_vehicle_missions(
+    vehicle_id: str, session: AsyncSession, limit: int = 50, offset: int = 0
+) -> list[MissionResponse]:
+    """Return mission history for a vehicle; raises VehicleNotFound if absent."""
+    if await get_vehicle_by_id(vehicle_id, session) is None:
+        raise VehicleNotFound(vehicle_id)
+    return await get_missions_by_vehicle(vehicle_id, session, limit=limit, offset=offset)
+
+
+async def get_vehicle_maintenance(
+    vehicle_id: str, session: AsyncSession, limit: int = 50, offset: int = 0
+) -> list[MaintenanceRecordResponse]:
+    """Return maintenance records for a vehicle; raises VehicleNotFound if absent."""
+    if await get_vehicle_by_id(vehicle_id, session) is None:
+        raise VehicleNotFound(vehicle_id)
+    return await get_maintenance_by_vehicle(
+        vehicle_id, session, limit=limit, offset=offset
+    )
 
 
 async def update_vehicle_status(

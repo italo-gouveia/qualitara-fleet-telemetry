@@ -211,6 +211,7 @@ Three key decisions with full context, trade-offs, and scale analysis:
 |----------|---------|-------------|
 | `DATABASE_URL` | `sqlite+aiosqlite:///./fleet.db` | DB connection string |
 | `LOG_LEVEL` | `INFO` | Logging level |
+| `LOG_FORMAT` | `json` | Log format: `json` (structured, Docker/prod) or `text` (human-readable, local dev) |
 | `CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed frontend origins (JSON list) |
 
 Set via `.env` in `backend/` (gitignored) or as shell environment variables.

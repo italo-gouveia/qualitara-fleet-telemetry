@@ -813,6 +813,60 @@ Uses `${DS_PROMETHEUS}` template variable with `__inputs` block for proper provi
 | `docker compose up --build` → Grafana opens with populated dashboard | ✅ |
 | `pytest -v` | ✅ 55 passed (no app code changed) |
 
+---
+
+## Interaction 21 — Prompt 21: Missions/Maintenance Endpoints, Anomaly Offset, Prometheus Alerts, README Fix
+
+### Prompt issued
+
+> Four gaps in one pass: (1) missions and maintenance_records tables populated on fault-transition have no query endpoints; (2) GET /anomalies missing offset parameter (inconsistent with GET /vehicles); (3) LOG_FORMAT missing from README env vars table; (4) Prometheus has no alert rules defined. Add all four, including tests.
+
+### Output summary
+
+**`GET /vehicles/{vehicle_id}/missions`** — mission history per vehicle, newest first, with `limit` (1–100) and `offset` (≥0). Returns 404 if vehicle unknown.
+
+**`GET /vehicles/{vehicle_id}/maintenance`** — maintenance records per vehicle, newest first, same pagination params. Returns 404 if vehicle unknown.
+
+Layer stack for both: `routers/vehicle.py` → `services/vehicle.py` → `repositories/vehicle_repository.py`. Service verifies vehicle exists before querying (raises `VehicleNotFound`); repository uses `.order_by(created_at.desc()).limit().offset()`.
+
+New schemas: `MissionResponse`, `MaintenanceRecordResponse` added to `app/schemas/vehicle.py`.
+
+**`GET /anomalies` — `offset` parameter added** — `offset: Annotated[int, Query(ge=0)] = 0` threaded through router → service → repository, consistent with `GET /vehicles` pagination.
+
+**`prometheus/alerts.yml`** — 3 alerting rules:
+- `HighErrorRate`: 5xx rate > 0.05/s for 1m → critical
+- `HighP95Latency`: p95 > 1s for 2m → warning
+- `BackendDown`: `up{job="fleet-backend"} == 0` for 30s → critical
+
+`prometheus/prometheus.yml` updated with `rule_files: [/etc/prometheus/alerts.yml]`. `docker-compose.yml` mounts `./prometheus/alerts.yml` read-only alongside the main config.
+
+**README** — `LOG_FORMAT` row added to the environment variables table.
+
+**Tests** (5 new, all in existing files):
+- `test_get_vehicle_missions_returns_list` — fault transition + GET missions → cancelled mission present
+- `test_get_vehicle_missions_not_found_returns_404`
+- `test_get_vehicle_maintenance_returns_list` — fault transition + GET maintenance → record present
+- `test_get_vehicle_maintenance_not_found_returns_404`
+- `test_anomaly_query_offset_skips_first_result` — 2 anomalies, offset=1 returns only the second
+
+### Corrections and redirections
+
+None — first attempt passed ruff, mypy, and all 60 tests.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `GET /vehicles/{id}/missions` — 200 list or 404 | ✅ |
+| `GET /vehicles/{id}/maintenance` — 200 list or 404 | ✅ |
+| `GET /anomalies` accepts `offset` | ✅ |
+| `prometheus/alerts.yml` — 3 rules, mounted in compose | ✅ |
+| `LOG_FORMAT` in README env vars table | ✅ |
+| `pytest -v` | ✅ 60 passed (+5 new tests) |
+| `ruff check .` / `mypy app/` | ✅ Clean (36 source files) |
+
+---
+
 ### Post-interaction fix — Grafana datasource UID mismatch
 
 **Bug:** After running the full stack with `--profile load-test`, all 4 Grafana panels showed "No data" with warning triangles. Prometheus was scraping correctly (`health: up`, last scrape confirmed via API) and metrics existed (`http_requests_total`, `http_request_duration_seconds_bucket`). Root cause: the `${DS_PROMETHEUS}` template variable in `fleet.json` is an **import-time substitution** mechanism (for UI imports) — it is NOT resolved by the Grafana filesystem provisioner. The datasource YAML had no fixed `uid`, so Grafana auto-generated `PBFA97CFB590B2093`; the dashboard panels referenced `${DS_PROMETHEUS}` which remained unresolved, causing all queries to fail silently.

@@ -75,3 +75,22 @@ async def test_anomaly_query_limit_respected(client: AsyncClient) -> None:
     response = await client.get("/anomalies", params={"limit": 2})
     assert response.status_code == 200
     assert len(response.json()) <= 2
+
+
+@pytest.mark.asyncio
+async def test_anomaly_query_offset_skips_first_result(client: AsyncClient) -> None:
+    vid = "v-an-offset"
+    # Two telemetry events → two anomalies for the same vehicle
+    await client.post("/telemetry", json=make_event(vehicle_id=vid, battery_pct=_LOW_BAT))
+    await client.post("/telemetry", json=make_event(vehicle_id=vid, battery_pct=_LOW_BAT))
+
+    all_response = await client.get("/anomalies", params={"vehicle_id": vid, "limit": 10})
+    all_ids = [a["id"] for a in all_response.json()]
+    assert len(all_ids) >= 2
+
+    offset_response = await client.get(
+        "/anomalies", params={"vehicle_id": vid, "limit": 10, "offset": 1}
+    )
+    offset_ids = [a["id"] for a in offset_response.json()]
+    # Offset=1 must skip the first result
+    assert offset_ids == all_ids[1:]

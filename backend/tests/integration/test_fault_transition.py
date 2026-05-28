@@ -138,3 +138,57 @@ async def test_fault_transition_vehicle_not_found_returns_404(
 ) -> None:
     response = await client.patch("/vehicles/v-nonexistent/status", json={"status": "fault"})
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_missions_returns_list(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    vid = "v-missions-1"
+    await _seed_vehicle(db_session, vid)
+    await _seed_active_mission(db_session, vid)
+    await db_session.commit()
+
+    await client.patch(f"/vehicles/{vid}/status", json={"status": "fault"})
+
+    response = await client.get(f"/vehicles/{vid}/missions")
+    assert response.status_code == 200
+    missions = response.json()
+    assert len(missions) >= 1
+    assert missions[0]["vehicle_id"] == vid
+    assert missions[0]["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_missions_not_found_returns_404(
+    client: AsyncClient,
+) -> None:
+    response = await client.get("/vehicles/v-no-such/missions")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_maintenance_returns_list(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    vid = "v-maint-1"
+    await _seed_vehicle(db_session, vid)
+    await _seed_active_mission(db_session, vid)
+    await db_session.commit()
+
+    await client.patch(f"/vehicles/{vid}/status", json={"status": "fault"})
+
+    response = await client.get(f"/vehicles/{vid}/maintenance")
+    assert response.status_code == 200
+    records = response.json()
+    assert len(records) >= 1
+    assert records[0]["vehicle_id"] == vid
+    assert records[0]["reason"] == "fault_transition"
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_maintenance_not_found_returns_404(
+    client: AsyncClient,
+) -> None:
+    response = await client.get("/vehicles/v-no-such/maintenance")
+    assert response.status_code == 404

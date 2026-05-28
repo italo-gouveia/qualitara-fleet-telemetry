@@ -14,9 +14,15 @@ async def get_anomalies(
     start: datetime | None = None,
     end: datetime | None = None,
     limit: int = 100,
+    offset: int = 0,
 ) -> list[Anomaly]:
     capped = min(limit, _MAX_LIMIT)
-    query = select(Anomaly).order_by(Anomaly.detected_at.desc()).limit(capped)
+    query = (
+        select(Anomaly)
+        .order_by(Anomaly.detected_at.desc())
+        .limit(capped)
+        .offset(offset)
+    )
     if vehicle_id:
         query = query.where(Anomaly.vehicle_id == vehicle_id)
     if start:

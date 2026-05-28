@@ -12,9 +12,17 @@ async def query_anomalies(
     start: datetime | None = None,
     end: datetime | None = None,
     limit: int = 100,
+    offset: int = 0,
 ) -> list[AnomalyResponse]:
     """Return anomalies with optional filters applied."""
-    rows = await get_anomalies(session, vehicle_id=vehicle_id, start=start, end=end, limit=limit)
+    rows = await get_anomalies(
+        session,
+        vehicle_id=vehicle_id,
+        start=start,
+        end=end,
+        limit=limit,
+        offset=offset,
+    )
     return [
         AnomalyResponse(
             id=row.id,
