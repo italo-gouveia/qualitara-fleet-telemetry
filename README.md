@@ -217,9 +217,42 @@ With the Locust load test running at ~14 RPS and 0 errors all three alerts stay 
 - Alertmanager with a notification receiver (Slack / PagerDuty) wired to the firing alerts
 - **OpenTelemetry** tracing through the `router → service → repository` chain
 
+## Future Enhancements Roadmap
+
+Identified improvements that are out of scope for the current delivery but are well-defined next steps:
+
+### API and backend
+| Enhancement | Notes |
+|---|---|
+| **Sorting on list endpoints** | `GET /vehicles`, `GET /anomalies`, `GET /vehicles/{id}/missions` — add `sort_by` + `order` query params; needs DB index review |
+| **Advanced filtering on anomalies** | Filter by anomaly type (`type=low_battery,fault_entered`), severity level, multiple vehicle IDs; extend `GET /anomalies` query params |
+| **Cursor-based pagination** | Replace `limit`/`offset` with stable cursor tokens — prevents page drift under concurrent ingest; breaking API change |
+| **Coverage threshold in CI** | `pytest --cov=app --cov-fail-under=80` — enforces coverage does not regress |
+| **TestContainers** | Replace in-memory SQLite with real PostgreSQL in integration tests; removes SQLite isolation caveats from ADR Decision 1 |
+| **Authentication / API keys** | Not in spec; ~1 h to add header-based API key validation |
+| **Rate limiting on ingest** | Useful in production; not required by spec |
+| **Background Tasks → Kafka** | `BackgroundTasks` is the planned next step for anomaly detection; Kafka adds operational overhead without a scale trigger |
+
+### Frontend and dashboard
+| Enhancement | Notes |
+|---|---|
+| **Geospatial vehicle map (Leaflet)** | All vehicles expose `lat`/`lon`; `react-leaflet` (no API key) could show a live map with markers coloured by status, updating every 2 s — strong visual differentiator |
+| **Sorting on the vehicle table** | Click column headers to sort by battery, status, last update |
+| **Client-side filtering on anomalies panel** | Filter by type or vehicle ID without a new API call |
+| **Vehicle detail drill-down** | Click a vehicle row → modal or side panel with full missions and maintenance history |
+| **Historical time-series charts** | DB schema already stores all telemetry events; add charts for battery trend, speed over time per vehicle |
+| **WebSocket / SSE push** | Replace 2 s polling with Server-Sent Events — reduces latency and server load at scale |
+
+### Infrastructure and observability
+| Enhancement | Notes |
+|---|---|
+| **Alertmanager notification receivers** | Alert rules are defined in `prometheus/alerts.yml`; wiring Slack / PagerDuty receivers is infra config |
+| **OpenTelemetry distributed tracing** | Trace the full `router → service → repository` chain; `X-Request-Id` middleware already lays the groundwork |
+| **Multi-tenant / per-fleet isolation** | Single fleet per deployment by design; multi-tenant would require auth + data partitioning |
+
 ## Non-Goals
 
-Explicitly out of scope — not oversights:
+Explicitly out of scope for this delivery — not oversights:
 
 | Feature | Rationale |
 |---------|-----------|
@@ -227,7 +260,6 @@ Explicitly out of scope — not oversights:
 | Rate limiting on ingest | Useful in production; not in spec |
 | WebSocket / SSE push | 2 s polling sufficient; WS adds reconnection complexity |
 | Zone geometry / collision detection | Spec delegates this to the edge client |
-| Historical time-series analytics | DB schema supports it; not required |
 | Multi-tenant / per-fleet isolation | Single fleet per deployment; spec is explicit |
 | Alertmanager / notification receivers | Alert rules defined; wiring Slack/PagerDuty is infra config, not code |
 | Background Tasks → Kafka | `BackgroundTasks` is the planned next step for anomaly detection; Kafka adds operational overhead without a scale trigger |
