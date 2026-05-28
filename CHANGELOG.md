@@ -57,6 +57,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Backend healthcheck** — `python:3.12-slim` does not include `curl`. Replaced healthcheck command with `python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"` using stdlib `urllib`.
 - **`async with session.begin()` conflict** — initial telemetry service used explicit transaction begin, conflicting with SQLAlchemy autobegin when a test fixture had already executed a query. Moved to router-commits pattern.
 
+#### Testing — Prompt 24 additions
+- `apiFetch` unit tests (URL construction, query params, JSON parsing, 404/500 error throwing)
+- `VehicleList` unit tests (loading, error, empty, populated states)
+- `VehicleRow` additional unit tests (battery-fill color red/green, anomaly badge show/hide)
+- `ZoneCountsPanel` additional unit tests (loading state, error state)
+- MSW (`msw/node`) integration tests: `FleetSummary`, `VehicleList`, `ZoneCountsPanel` with real QueryClient — no hook mocks
+- Playwright E2E (Chromium, `page.route()` mocks): 7 scenarios covering page title, LIVE badge, fleet summary counts, vehicle list, fault styling, zone panel, zone sort order
+- CI third job `e2e` — runs Playwright on Node 22 in parallel with backend and frontend jobs
+
 ### Changed
 
 - Frontend Docker image upgraded from `node:20-alpine` to `node:22-alpine` (Node 22 LTS); CI updated to `node-version: "22"`; `engines: { node: ">=22.0.0" }` added to `package.json`

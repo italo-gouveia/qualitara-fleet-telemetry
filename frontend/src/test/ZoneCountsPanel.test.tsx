@@ -11,6 +11,28 @@ import { useZoneCounts } from '../hooks/useZoneCounts'
 const mockUseZoneCounts = vi.mocked(useZoneCounts)
 
 describe('ZoneCountsPanel', () => {
+  it('renders loading state while data is being fetched', () => {
+    mockUseZoneCounts.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as ReturnType<typeof useZoneCounts>)
+    render(<ZoneCountsPanel />)
+    expect(screen.getByText(/loading zones/i)).toBeInTheDocument()
+  })
+
+  it('renders error state when the request fails', () => {
+    mockUseZoneCounts.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    } as ReturnType<typeof useZoneCounts>)
+    render(<ZoneCountsPanel />)
+    const msg = screen.getByText(/failed to load zone counts/i)
+    expect(msg).toBeInTheDocument()
+    expect(msg).toHaveClass('error')
+  })
+
   it('renders a row for each zone', () => {
     mockUseZoneCounts.mockReturnValue({
       data: { aisle_a: 3, charging_bay_1: 7, pack_station: 1 },

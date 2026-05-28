@@ -1035,3 +1035,102 @@ All hooks mocked at module level via `vi.mock('../hooks/...')` + `vi.mocked()` �
 | `.github/workflows/ci.yml` uses Node 22 + adds `npm test` step | ✅ |
 | `CHANGELOG.md` at repo root (Keep a Changelog format) | ✅ |
 | `docs/AI_INTERACTION_LOG.md` updated with Interaction 23 | ✅ |
+
+---
+
+## Interaction 24 — Prompt 24: Complete Frontend Test Pyramid
+
+### Prompt issued
+
+> Build a proper testing pyramid for the React frontend: unit gaps (VehicleList, apiFetch, VehicleRow battery/anomaly, ZoneCountsPanel loading/error), integration tests using MSW + real QueryClient (no hook mocks), and E2E tests with Playwright + Chromium + `page.route()` API mocks. No real backend required for any layer. Add E2E CI job.
+
+### Output summary
+
+**Dependencies added:**
+- `msw@2.x` — network-level HTTP mock for Node (integration tests)
+- `@playwright/test@1.x` — E2E framework; Chromium browser installed via `npx playwright install chromium --with-deps`
+
+**MSW setup:**
+- `src/test/mocks/handlers.ts` — default handlers for all 4 endpoints (fleet/state, vehicles, zones/counts, anomalies)
+- `src/test/mocks/server.ts` — `setupServer(...handlers)` from `msw/node`
+- `src/test/setup.ts` — added MSW lifecycle (`beforeAll/afterEach/afterAll`)
+
+**vite.config.ts** — added `test.exclude: ['**/e2e/**']` (prevents Vitest picking up Playwright specs) and `test.env.VITE_API_BASE_URL` (needed by `apiFetch` in unit and integration tests)
+
+**New unit test files:**
+
+`src/test/apiFetch.test.ts` (5 tests):
+- Correct base URL + path
+- Multiple query params appended
+- Parsed JSON returned on 200
+- `Error("API error 404")` thrown on 404
+- `Error("API error 500")` thrown on 500
+Uses `vi.stubGlobal('fetch', vi.fn())` — no MSW dependency
+
+`src/test/VehicleList.test.tsx` (4 tests):
+- Loading state
+- Error state (`error` CSS class present)
+- Empty state
+- Populated: one row per vehicle, count in heading
+
+**Additions to existing test files:**
+
+`VehicleRow.test.tsx` (+4 tests):
+- Battery fill `background-color: rgb(239, 68, 68)` when `battery_pct < 15`
+- Battery fill `background-color: rgb(34, 197, 94)` when `battery_pct >= 15`
+- Anomaly badge (`badge-orange`) rendered when hook returns non-empty array
+- No anomaly badge when hook returns `[]`
+
+`ZoneCountsPanel.test.tsx` (+2 tests):
+- Loading state
+- Error state (`error` CSS class present)
+
+**Integration tests:**
+
+`src/test/integration/Dashboard.integration.test.tsx` (6 tests):
+- `FleetSummary`: loading → then `19 vehicles` + all 4 status counts from real HTTP
+- `VehicleList`: loads both vehicles, shows `Vehicles (2)` heading
+- `VehicleList`: error state when server returns 500 (via `server.use(http.get(...))` override)
+- `ZoneCountsPanel`: loads and sorts zones descending
+- `ZoneCountsPanel`: error state when server returns 500
+
+**E2E — Playwright:**
+
+`playwright.config.ts` — `testDir: ./e2e`, `workers: 1`, Chromium only, `webServer: npm run dev`, `reuseExistingServer: !CI`
+
+`e2e/fleet-dashboard.spec.ts` (7 tests, all with `page.route()` mocks):
+- Page title and LIVE badge visible
+- Fleet summary total and all 4 status tile labels (scoped to `.status-tiles` to avoid badge collision)
+- Vehicle list heading + both vehicle IDs
+- Fault row has `row-fault` CSS class
+- Zone panel heading + `zone-high` row visible
+- Zones sorted descending: `charging bay 1` → `aisle a` → `pack station`
+- Status tile counts match mocked data (10 idle, 5 moving, 3 charging, 2 fault)
+
+**CI update:**
+
+`.github/workflows/ci.yml` — third parallel job `e2e`: Node 22, `npm ci`, `npx playwright install chromium --with-deps`, `npm run test:e2e`
+
+**`package.json` scripts added:**
+`test:e2e`, `test:e2e:ui`, `test:e2e:report`
+
+### Corrections and redirections
+
+- **Vitest picked up Playwright spec** — `test.beforeEach` from `@playwright/test` is incompatible with Vitest globals. Fix: added `exclude: ['**/e2e/**']` to `vite.config.ts` test config.
+- **Strict mode violation in E2E** — `getByText('moving')` resolved to 2 elements (status tile label AND vehicle badge). Fix: scoped to `page.locator('.status-tiles').getByText(label)`.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `npm test` (unit + integration) | ✅ 29 passed (6 test files) |
+| `npm run test:e2e` | ✅ 7 passed (Chromium) |
+| `apiFetch.test.ts` — 5 tests | ✅ |
+| `VehicleList.test.tsx` — 4 tests | ✅ |
+| `VehicleRow.test.tsx` — now 7 tests (3+4) | ✅ |
+| `ZoneCountsPanel.test.tsx` — now 5 tests (3+2) | ✅ |
+| `integration/Dashboard.integration.test.tsx` — 6 tests | ✅ |
+| `e2e/fleet-dashboard.spec.ts` — 7 E2E scenarios | ✅ |
+| MSW server lifecycle in `setup.ts` | ✅ |
+| CI: 3 parallel jobs (backend, frontend, e2e) | ✅ |
+| CHANGELOG.md updated | ✅ |
