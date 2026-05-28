@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.anomaly import ANOMALY_RULES
@@ -8,6 +10,8 @@ from app.repositories.telemetry_repository import (
     upsert_vehicle_state,
 )
 from app.schemas.telemetry import IngestResult, TelemetryEventIn
+
+logger = logging.getLogger(__name__)
 
 
 async def ingest_event(event: TelemetryEventIn, session: AsyncSession) -> IngestResult:
@@ -29,4 +33,15 @@ async def ingest_event(event: TelemetryEventIn, session: AsyncSession) -> Ingest
             session=session,
         )
 
+    logger.info(
+        "telemetry_ingested",
+        extra={
+            "event_id": str(event_id),
+            "vehicle_id": event.vehicle_id,
+            "status": event.status,
+            "battery_pct": event.battery_pct,
+            "zone_entered": event.zone_entered,
+            "anomalies_detected": len(detected),
+        },
+    )
     return IngestResult(id=event_id, anomalies_detected=len(detected))

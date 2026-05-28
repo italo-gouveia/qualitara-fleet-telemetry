@@ -8,14 +8,16 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.core.exception_handlers import unhandled_exception_handler
+from app.core.logging_config import setup_logging
 from app.core.zones import ZONES
 from app.database import AsyncSessionLocal, engine
+from app.middleware.request_logging import RequestLoggingMiddleware
 from app.routers.anomaly import router as anomaly_router
 from app.routers.fleet import router as fleet_router
 from app.routers.telemetry import router as telemetry_router
 from app.routers.vehicle import router as vehicle_router
 
-logging.basicConfig(level=settings.log_level.upper())
+setup_logging(settings.log_level, settings.log_format)
 logger = logging.getLogger(__name__)
 
 
@@ -51,6 +53,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

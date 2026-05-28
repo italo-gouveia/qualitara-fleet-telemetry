@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./fleet.db"
     log_level: str = "INFO"
+    log_format: str = "json"
     cors_origins: list[str] = ["http://localhost:5173"]
 
 

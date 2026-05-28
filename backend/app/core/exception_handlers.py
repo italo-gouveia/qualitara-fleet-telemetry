@@ -8,11 +8,15 @@ logger = logging.getLogger(__name__)
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all handler: log full context server-side, return a safe generic message."""
+    request_id = request.headers.get("X-Request-Id", "unknown")
     logger.error(
-        "Unhandled exception on %s %s: %s",
-        request.method,
-        request.url.path,
-        exc,
+        "unhandled_exception",
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "error": str(exc),
+        },
         exc_info=True,
     )
     return JSONResponse(

@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -6,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.vehicle import MaintenanceRecord, Mission, VehicleState
 from app.schemas.telemetry import VehicleStatus
 from app.schemas.vehicle import StatusUpdateResponse
+
+logger = logging.getLogger(__name__)
 
 
 class VehicleNotFound(Exception):
@@ -30,13 +33,23 @@ async def update_vehicle_status(
     vehicle.updated_at = datetime.now(UTC)
 
     if new_status != VehicleStatus.FAULT:
-        return StatusUpdateResponse(
+        result = StatusUpdateResponse(
             vehicle_id=vehicle_id,
             status=new_status.value,
             mission_cancelled=False,
         )
+    else:
+        result = await _handle_fault_transition(vehicle_id, session)
 
-    return await _handle_fault_transition(vehicle_id, session)
+    logger.info(
+        "vehicle_status_updated",
+        extra={
+            "vehicle_id": vehicle_id,
+            "new_status": new_status.value,
+            "mission_cancelled": result.mission_cancelled,
+        },
+    )
+    return result
 
 
 async def _handle_fault_transition(

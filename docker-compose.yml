@@ -19,12 +19,19 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://fleet:fleet@db:5432/fleet
       LOG_LEVEL: INFO
+      LOG_FORMAT: json
       CORS_ORIGINS: '["http://localhost:5173"]'
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
 
   frontend:
     build:
@@ -34,7 +41,8 @@ services:
     ports:
       - "5173:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   pgdata:

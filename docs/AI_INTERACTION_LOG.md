@@ -578,3 +578,54 @@ None — first attempt passed all checks.
 | `test_vehicles_pagination_limit` passes | ✅ |
 | `pytest -v` | ✅ 24 passed |
 | `ruff check .` / `mypy app/` | ✅ All checks passed |
+
+---
+
+## Interaction 15 — Prompt 15: Observability — Structured Logging
+
+### Prompt issued
+
+> Add structured logging throughout the stack: JSON formatter via `python-json-logger` configurable by `LOG_FORMAT` env; `RequestLoggingMiddleware` that propagates/generates `X-Request-Id` and logs method, path, status code, and duration; structured `extra={}` business-event logs in `telemetry` and `vehicle` services; update exception handler to include `request_id`; set `LOG_FORMAT: json` in docker-compose backend env. Prompt file first, then implement.
+
+### Output summary
+
+**`python-json-logger>=3.2`** added to `requirements.txt`.
+
+**`Settings.log_format`** added to `config.py` (default `"json"`; override to `"text"` locally via `.env`).
+
+**`app/core/logging_config.py`** — `setup_logging(level, fmt)` configures root logger:  
+- `fmt="json"` → `JsonFormatter` from `pythonjsonlogger.json` (machine-readable output for Docker/prod)  
+- `fmt="text"` → standard `Formatter` for human-readable local dev  
+Replaces `logging.basicConfig` call in `main.py`.
+
+**`app/middleware/request_logging.py`** — `RequestLoggingMiddleware(BaseHTTPMiddleware)`:  
+Reads `X-Request-Id` header or generates `uuid4()`; calls next handler; logs `http_request` event with `request_id`, `method`, `path`, `status_code`, `duration_ms`; echoes `X-Request-Id` on response.  
+Added to `app` in `main.py` before `CORSMiddleware`.
+
+**`docker-compose.yml`** — `LOG_FORMAT: json` added to backend env; backend `healthcheck` added (`curl -f http://localhost:8000/health`, 6 retries, 15s start_period); frontend `depends_on` upgraded to `condition: service_healthy` so nginx only starts after uvicorn is ready.
+
+**Business-event logs in services:**
+- `telemetry.py` — `logger.info("telemetry_ingested", extra={event_id, vehicle_id, status, battery_pct, zone_entered, anomalies_detected})`
+- `vehicle.py` — `logger.info("vehicle_status_updated", extra={vehicle_id, new_status, mission_cancelled})`
+
+**`exception_handlers.py`** — refactored to `logger.error("unhandled_exception", extra={request_id, method, path, error})`.
+
+### Corrections and redirections
+
+- Import `from pythonjsonlogger.jsonlogger import JsonFormatter` triggered `DeprecationWarning` — library moved to `pythonjsonlogger.json` in v3. Fix: updated import to `from pythonjsonlogger.json import JsonFormatter`.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `python-json-logger` in requirements.txt | ✅ |
+| `log_format` setting in `config.py` | ✅ |
+| `setup_logging()` in `logging_config.py`, called from `main.py` | ✅ |
+| `RequestLoggingMiddleware` — `X-Request-Id` on every response | ✅ |
+| `telemetry_ingested` log with structured extra fields | ✅ |
+| `vehicle_status_updated` log with structured extra fields | ✅ |
+| Exception handler uses `request_id` from header | ✅ |
+| `LOG_FORMAT: json` in docker-compose backend env | ✅ |
+| Backend healthcheck + frontend `service_healthy` condition | ✅ |
+| `pytest -v` | ✅ 24 passed |
+| `ruff check .` / `mypy app/` | ✅ All checks passed (36 source files) |
