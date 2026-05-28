@@ -10,10 +10,14 @@ from app.services.anomaly import query_anomalies
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
 
 
-@router.get("", response_model=list[AnomalyResponse])
+@router.get(
+    "",
+    response_model=list[AnomalyResponse],
+    summary="Query anomaly events with optional filters",
+)
 async def list_anomalies(
     session: SessionDep,
-    vehicle_id: Annotated[str | None, Query()] = None,
+    vehicle_id: Annotated[str | None, Query(max_length=20)] = None,
     start: Annotated[datetime | None, Query()] = None,
     end: Annotated[datetime | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,

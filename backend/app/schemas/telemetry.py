@@ -13,7 +13,7 @@ class VehicleStatus(StrEnum):
 
 
 class TelemetryEventIn(BaseModel):
-    vehicle_id: str
+    vehicle_id: Annotated[str, Field(min_length=1, max_length=20)]
     timestamp: datetime
     lat: float
     lon: float

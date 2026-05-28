@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Path, status
 
 from app.database import SessionDep
 from app.schemas.vehicle import StatusUpdateRequest, StatusUpdateResponse
@@ -7,9 +9,13 @@ from app.services.vehicle import VehicleNotFound, update_vehicle_status
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
 
 
-@router.patch("/{vehicle_id}/status", response_model=StatusUpdateResponse)
+@router.patch(
+    "/{vehicle_id}/status",
+    response_model=StatusUpdateResponse,
+    summary="Update vehicle status; fault cancels active mission",
+)
 async def patch_vehicle_status(
-    vehicle_id: str,
+    vehicle_id: Annotated[str, Path(min_length=1, max_length=20)],
     body: StatusUpdateRequest,
     session: SessionDep,
 ) -> StatusUpdateResponse:

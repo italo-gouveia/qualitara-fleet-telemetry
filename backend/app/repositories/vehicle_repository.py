@@ -26,9 +26,11 @@ async def get_fleet_aggregate(session: AsyncSession) -> FleetStateResponse:
     )
 
 
-async def get_all_vehicle_states(session: AsyncSession) -> list[VehicleStateResponse]:
+async def get_all_vehicle_states(
+    session: AsyncSession, limit: int = 50, offset: int = 0
+) -> list[VehicleStateResponse]:
     rows = await session.execute(
-        select(VehicleState).order_by(VehicleState.vehicle_id)
+        select(VehicleState).order_by(VehicleState.vehicle_id).limit(limit).offset(offset)
     )
     return [
         VehicleStateResponse(

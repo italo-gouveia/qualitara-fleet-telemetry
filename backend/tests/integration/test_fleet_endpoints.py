@@ -76,3 +76,14 @@ async def test_vehicles_ordered_by_vehicle_id(client: AsyncClient) -> None:
     response = await client.get("/vehicles")
     ids = [v["vehicle_id"] for v in response.json()]
     assert ids == sorted(ids)
+
+
+@pytest.mark.asyncio
+async def test_vehicles_pagination_limit(client: AsyncClient) -> None:
+    # Seed two vehicles so there is at least something to paginate
+    for vehicle_id in ["v-pg1", "v-pg2"]:
+        await client.post("/telemetry", json=make_event(vehicle_id=vehicle_id))
+
+    response = await client.get("/vehicles?limit=1&offset=0")
+    assert response.status_code == 200
+    assert len(response.json()) == 1

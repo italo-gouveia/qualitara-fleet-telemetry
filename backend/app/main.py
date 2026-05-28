@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.config import settings
+from app.core.exception_handlers import unhandled_exception_handler
 from app.core.zones import ZONES
 from app.database import AsyncSessionLocal, engine
 from app.routers.anomaly import router as anomaly_router
@@ -41,7 +42,11 @@ async def _seed_zone_counts() -> None:
 
 app = FastAPI(
     title="Fleet Telemetry Monitor",
-    description="Real-time monitoring for 50 autonomous industrial vehicles.",
+    description=(
+        "Real-time monitoring API for 50 autonomous industrial vehicles.\n\n"
+        "Ingest telemetry at 1 Hz, track vehicle states, zone entry counts, "
+        "and anomaly events. See `docs/ADR.md` for architecture decisions."
+    ),
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -53,6 +58,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(telemetry_router)
 app.include_router(fleet_router)

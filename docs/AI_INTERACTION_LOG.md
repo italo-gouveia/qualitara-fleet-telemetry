@@ -530,3 +530,51 @@ None — first attempt passed all checks.
 | `pytest -v` | ✅ 23 passed |
 | `ruff check .` / `mypy app/` | ✅ All checks passed |
 | README updated to `fastapi dev` | ✅ |
+
+---
+
+## Interaction 14 — Prompt 14: Hardening and API Polish
+
+### Prompt issued
+
+> Red/yellow priority hardening before submission: (1) global exception handler returning `{"detail": "..."}` with 500 and full server-side logging; (2) `[tool.fastapi] app = "app.main:app"` in `pyproject.toml` so `fastapi dev` works without arguments; (3) `vehicle_id` validation — `Field(min_length=1, max_length=20)` in schema, `Path(min_length=1, max_length=20)` in route handler, `Query(max_length=20)` on anomaly filter; (4) OpenAPI `summary=` on all key endpoints; (5) `GET /vehicles` pagination with `limit` (1–100, default 50) and `offset` (≥0, default 0) query params. Write prompt file first, then implement.
+
+### Output summary
+
+**Exception handler** — Created `backend/app/core/exception_handlers.py` with `unhandled_exception_handler(request, exc)`: logs `ERROR` with method, path, and full traceback, returns `JSONResponse(status_code=500, content={"detail": "An unexpected error occurred. Please try again later."})`. Wired into `app` in `main.py` via `app.add_exception_handler(Exception, unhandled_exception_handler)`.
+
+**pyproject.toml entrypoint** — Added `[tool.fastapi]` section with `app = "app.main:app"` so `fastapi dev` resolves the application without explicit path argument.
+
+**vehicle_id validation** — Three-point enforcement:
+- `TelemetryEventIn.vehicle_id: Annotated[str, Field(min_length=1, max_length=20)]` in `app/schemas/telemetry.py`
+- `vehicle_id: Annotated[str, Path(min_length=1, max_length=20)]` in `PATCH /vehicles/{vehicle_id}/status` route
+- `vehicle_id: Annotated[str | None, Query(max_length=20)]` in `GET /anomalies` filter
+
+**OpenAPI summaries** — Added `summary=` to all six endpoints:
+- `POST /telemetry` → "Ingest a telemetry event"
+- `GET /fleet/state` → "Per-status vehicle counts"
+- `GET /zones/counts` → "Entry counts for all 20 zones"
+- `GET /vehicles` → "All known vehicles, paginated"
+- `PATCH /vehicles/{vehicle_id}/status` → "Update vehicle status; fault cancels active mission"
+- `GET /anomalies` → "Query anomaly events with optional filters"
+
+**Pagination on GET /vehicles** — `get_all_vehicle_states` in `vehicle_repository.py` now accepts `limit` and `offset`; service layer threads them through; router exposes them as typed `Query` params. Added `test_vehicles_pagination_limit` integration test.
+
+### Corrections and redirections
+
+- `app.add_exception_handler(Exception, unhandled_exception_handler) # type: ignore[arg-type]` — mypy flagged the inline ignore as unused (`unused-ignore`) after confirming the installed FastAPI version accepts `Exception` without type error. Fix: removed the `# type: ignore` comment.
+- Long `@router.get(...)` decorators in `anomaly.py` and `fleet.py` exceeded the 100-char ruff line limit after `summary=` was added. Fix: split each decorator across multiple lines.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `app/core/exception_handlers.py` exists with `unhandled_exception_handler` | ✅ |
+| `app.add_exception_handler(Exception, ...)` in `main.py` | ✅ |
+| `[tool.fastapi] app = "app.main:app"` in `pyproject.toml` | ✅ |
+| `vehicle_id` validated in schema, path, and query filter | ✅ |
+| All 6 endpoints have `summary=` | ✅ |
+| `GET /vehicles` accepts `limit` and `offset` | ✅ |
+| `test_vehicles_pagination_limit` passes | ✅ |
+| `pytest -v` | ✅ 24 passed |
+| `ruff check .` / `mypy app/` | ✅ All checks passed |
