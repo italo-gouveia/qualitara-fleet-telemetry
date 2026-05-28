@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
@@ -16,7 +17,7 @@ function makeClient() {
   })
 }
 
-function Wrapper({ children }: { children: React.ReactNode }) {
+function Wrapper({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={makeClient()}>
       {children}

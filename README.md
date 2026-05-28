@@ -49,9 +49,9 @@ Real-time monitoring service for 50 autonomous industrial vehicles emitting tele
 | Database | PostgreSQL 16 (production / Docker) · SQLite + aiosqlite (tests) |
 | Frontend | React 18, TypeScript, Vite, TanStack Query v5 |
 | Tests (backend) | pytest-asyncio, httpx ASGITransport — 60 tests |
-| Tests (frontend) | Vitest, Testing Library — component + hook render contracts |
+| Tests (frontend) | Vitest + Testing Library (unit + MSW integration) — 29 tests; Playwright E2E (Chromium) — 7 scenarios |
 | Container | Docker Compose · full stack + optional Locust load-test profile |
-| CI | GitHub Actions — backend (pytest/ruff/mypy) + frontend (build/tsc/vitest) |
+| CI | GitHub Actions — 3 parallel jobs: backend (pytest/ruff/mypy), frontend (vitest/build/tsc), e2e (Playwright) |
 
 ## How to Run
 
@@ -137,7 +137,9 @@ mypy app/        # type checking
 
 ```bash
 cd frontend
-npm test         # Vitest — component and hook render contracts
+npm test               # Vitest — 29 unit + integration tests (MSW)
+npm run test:e2e       # Playwright — 7 E2E scenarios (Chromium, API mocked)
+npm run test:coverage  # Vitest with V8 coverage report
 ```
 
 ## API Endpoints

@@ -1134,3 +1134,67 @@ Uses `vi.stubGlobal('fetch', vi.fn())` — no MSW dependency
 | MSW server lifecycle in `setup.ts` | ✅ |
 | CI: 3 parallel jobs (backend, frontend, e2e) | ✅ |
 | CHANGELOG.md updated | ✅ |
+
+---
+
+## Interaction 25 — CI Fixes and Documentation Update
+
+### Prompt issued
+
+> CI has 2 errors (Frontend build/tsc, E2E Playwright) and 3 Node.js 20 deprecation warnings on all jobs. Fix the errors and update README, ADR, CHANGELOG to reflect the full current state of the project.
+
+### Root causes and fixes
+
+**Error 1 — Frontend build / tsc: `exit code 1`**
+
+Three interrelated TypeScript errors caught by `tsc -b`:
+1. `src/test/setup.ts`: `beforeAll`, `afterEach`, `afterAll` unknown — Vitest globals not in scope for the production tsconfig
+2. `src/test/VehicleRow.test.tsx`: `beforeEach` unknown — same root cause
+3. `vite.config.ts`: `test` property not in `UserConfigExport` type — `defineConfig` imported from `vite`, which doesn't know about Vitest's `test:` block
+
+**Fixes:**
+- `tsconfig.app.json`: added `"exclude": ["src/test"]` — test files are now invisible to `tsc -b`; Vitest handles its own transform independently
+- `vite.config.ts`: changed `import { defineConfig } from 'vite'` → `import { defineConfig } from 'vitest/config'` — `test:` block correctly typed
+
+**Error 2 — E2E Playwright: `exit code 1`**
+
+`VITE_API_BASE_URL` is not set in CI. The Playwright `webServer` spawns `npm run dev`, which builds the app with `import.meta.env.VITE_API_BASE_URL`. Without a value, `new URL(undefined + '/fleet/state')` throws before any `page.route()` mock can intercept.
+
+**Fixes:**
+- `src/api/client.ts`: added `|| 'http://localhost:8000'` fallback — defensive default for environments without the var
+- `.github/workflows/ci.yml` E2E job: added `env: VITE_API_BASE_URL: http://localhost:8000` on the `Run E2E tests` step — dev server process inherits it via process env
+
+**Warnings — Node.js 20 deprecation on all 3 jobs**
+
+`actions/checkout@v4` and `actions/setup-node@v4` / `actions/setup-python@v5` internally run on the Node.js 20 runtime (GitHub Actions runners). Forced migration to Node.js 24 is scheduled for June 2, 2026.
+
+**Fix:** added `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` at the workflow `env:` level — opts in now, eliminates warnings across all jobs.
+
+### Documentation updates
+
+**`docs/ADR.md`:**
+- Decision 4 added: frontend testing pyramid (unit/integration with MSW/E2E with Playwright) — rationale for the three-layer approach, why MSW over hook mocks for integration, why `page.route()` for E2E, tsconfig separation decision
+- Stale "Docker Compose omitted" entry removed from "Deliberately Left Out" (Docker Compose has been in the project since Prompt 11)
+
+**`README.md`:**
+- Stack table: Tests (frontend) row updated to "Vitest + MSW — 29 tests; Playwright E2E — 7 scenarios"
+- CI row updated to "3 parallel jobs: backend + frontend + e2e"
+- Run Tests section: added `npm run test:e2e` and `npm run test:coverage` commands
+
+**`CHANGELOG.md`:** CI/build fixes and documentation updates logged.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `npm run build` | ✅ Clean (no tsc errors) |
+| `npx tsc --noEmit` | ✅ Clean |
+| `npm test` (unit + integration) | ✅ 29 passed |
+| `npm run test:e2e` | ✅ 7 passed |
+| `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` in CI | ✅ |
+| `VITE_API_BASE_URL` fallback + CI env | ✅ |
+| `tsconfig.app.json` excludes `src/test` | ✅ |
+| `vite.config.ts` imports from `vitest/config` | ✅ |
+| ADR Decision 4 added | ✅ |
+| Stale Docker Compose entry removed from ADR | ✅ |
+| README stack table + Run Tests updated | ✅ |

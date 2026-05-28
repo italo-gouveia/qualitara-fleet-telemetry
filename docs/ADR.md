@@ -88,6 +88,32 @@ At 500+ vehicles with computationally heavy rules (ML inference, external lookup
 
 ---
 
+### Decision 4 — Frontend testing strategy: unit → integration (MSW) → E2E (Playwright)
+
+**Context**
+
+The React dashboard has no existing tests at the start of development. Testing strategy must be efficient (no real backend needed in CI), realistic (hooks and HTTP layer exercised, not just render), and maintainable.
+
+**Decision**
+
+Three-layer pyramid:
+1. **Unit** (Vitest + Testing Library) — hooks mocked at module level (`vi.mock`); tests component rendering in complete isolation.
+2. **Integration** (Vitest + MSW + real QueryClient) — MSW intercepts `fetch` at the Node network layer; TanStack Query, hooks, and components all run for real; no mock at the hook level.
+3. **E2E** (Playwright / Chromium) — full browser rendering with `page.route()` mocking all API calls; exercises routing, CSS classes, DOM structure, and cross-component interaction.
+
+**Why**
+
+- MSW is the standard React Testing Library recommendation for integration tests — it tests the real HTTP stack without a live server.
+- `page.route()` in Playwright means E2E tests never require the FastAPI backend; they run entirely offline and in CI with a Vite dev server.
+- Separating the test tsconfig scope (`tsconfig.app.json` excludes `src/test`) keeps `tsc -b` fast and focused on production code; Vitest handles test-file type transforms independently.
+- `vitest/config` (instead of `vite`) is used in `vite.config.ts` so the `test:` block is correctly typed without polluting the app tsconfig.
+
+**Trade-off**
+
+No TestContainers — the backend integration tests use in-memory SQLite, not real PostgreSQL. SQLite covers most cases but has weaker isolation guarantees (see Decision 1). This is a known and documented limitation, acceptable within the challenge scope.
+
+---
+
 ### Unclear Constraints and Assumptions
 
 | Assumption | Reasoning |
@@ -121,5 +147,4 @@ At 500+ vehicles with computationally heavy rules (ML inference, external lookup
 | WebSocket dashboard | Polling is sufficient; WebSocket adds reconnection complexity out of scope |
 | Zone geometry / collision detection | Spec explicitly delegates this to the edge client |
 | Historical telemetry analytics / time-series | DB schema supports it as a future add; not required |
-| Docker Compose | Simplifies Postgres setup; omitted to keep deliverable focused on code |
 | `PATCH /vehicles/{id}/mission` — manual mission control | Not required; inferred from spec that missions are managed externally |

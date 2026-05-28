@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000';
 
 export async function apiFetch<T>(path: string, params?: Record<string, string>): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`);

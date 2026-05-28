@@ -66,6 +66,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Playwright E2E (Chromium, `page.route()` mocks): 7 scenarios covering page title, LIVE badge, fleet summary counts, vehicle list, fault styling, zone panel, zone sort order
 - CI third job `e2e` — runs Playwright on Node 22 in parallel with backend and frontend jobs
 
+#### CI / build fixes — Prompt 25
+- `tsconfig.app.json`: exclude `src/test` — prevents `tsc -b` from type-checking Vitest globals and test-only casts
+- `vite.config.ts`: import `defineConfig` from `vitest/config` (not `vite`) — `test:` property now correctly typed
+- `api/client.ts`: fallback `|| 'http://localhost:8000'` for `VITE_API_BASE_URL` — prevents URL construction failure when env var is absent
+- CI workflow: `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` at workflow level — opts in to Node 24 for action runners before forced migration
+- CI E2E job: `VITE_API_BASE_URL: http://localhost:8000` env var — dev server sees it when Playwright spawns `npm run dev`
+- `docs/ADR.md`: Decision 4 added (frontend testing pyramid: unit/integration/E2E strategy and rationale); stale "Docker Compose omitted" entry removed
+- README: stack table and Run Tests section updated for full test pyramid and 3-job CI
+
 ### Changed
 
 - Frontend Docker image upgraded from `node:20-alpine` to `node:22-alpine` (Node 22 LTS); CI updated to `node-version: "22"`; `engines: { node: ">=22.0.0" }` added to `package.json`
