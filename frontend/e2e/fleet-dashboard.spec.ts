@@ -116,8 +116,10 @@ test('anomalies panel shows empty state when no anomalies', async ({ page }) => 
 test('anomalies panel heading and count badge are visible when anomalies present', async ({ page }) => {
   await page.route(`${API}/anomalies**`, route => route.fulfill({ json: ANOMALIES }))
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: /recent anomalies/i })).toBeVisible()
-  await expect(page.locator('.panel-count')).toContainText('2')
+  const anomaliesHeading = page.getByRole('heading', { name: /recent anomalies/i })
+  await expect(anomaliesHeading).toBeVisible()
+  // scope .panel-count to the anomalies heading — VehicleMap now also has a .panel-count
+  await expect(anomaliesHeading.locator('.panel-count')).toContainText('2')
 })
 
 test('anomaly rows render vehicle IDs and human-readable type labels', async ({ page }) => {
