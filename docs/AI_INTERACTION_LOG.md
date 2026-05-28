@@ -629,3 +629,50 @@ Added to `app` in `main.py` before `CORSMiddleware`.
 | Backend healthcheck + frontend `service_healthy` condition | ✅ |
 | `pytest -v` | ✅ 24 passed |
 | `ruff check .` / `mypy app/` | ✅ All checks passed (36 source files) |
+
+---
+
+## Interaction 16 — Prompt 16: Test Completion and Vehicle Detail Endpoint
+
+### Prompt issued
+
+> Close three gaps in one pass: (1) fill the empty `tests/unit/` folder with pure-function unit tests for all 5 anomaly rules; (2) add validation contract tests (422 on invalid vehicle_id lengths, limit=0, limit=101, anomaly filter too long); add offset pagination test; (3) add `GET /vehicles/{vehicle_id}` endpoint returning 200 or 404. Create prompt file first, then implement.
+
+### Output summary
+
+**Unit tests — `tests/unit/test_anomaly_rules.py`** (17 tests):
+- Local `make_event(**overrides)` helper builds `TelemetryEventIn` directly (not dict).
+- Each of 5 rules tested at boundary values: `check_low_battery` (boundary at 14 vs 15), `check_critical_battery` (4 vs 5), `check_fault_entered` (fault vs idle/moving/charging via `@pytest.mark.parametrize`), `check_speed_anomaly` (0.6+idle vs 0.5+idle vs 1.0+moving), `check_error_codes` (present, empty, multiple).
+- Pipeline tests: `ANOMALY_RULES` has exactly 5 entries; multi-anomaly event (battery_pct=4, status=FAULT, error_codes=["E01"]) detects ≥4 types.
+
+**Validation contract tests — `tests/integration/test_validation.py`** (5 tests):
+- `POST /telemetry` with `vehicle_id=""` → 422
+- `POST /telemetry` with `vehicle_id="x"*21` → 422
+- `GET /vehicles?limit=0` → 422
+- `GET /vehicles?limit=101` → 422
+- `GET /anomalies?vehicle_id=${"x"*21}` → 422
+
+**Offset pagination test** added to `test_fleet_endpoints.py`:
+- Finds absolute position of `v-off-a` in sorted list before asserting offset (robust against other test data in shared DB).
+
+**`GET /vehicles/{vehicle_id}` endpoint:**
+- `get_vehicle_by_id(vehicle_id, session)` added to `vehicle_repository.py`.
+- `get_vehicle(vehicle_id, session)` added to `services/vehicle.py` — raises `VehicleNotFound` if absent.
+- `GET /vehicles/{vehicle_id}` route added to `routers/vehicle.py` before `PATCH /{vehicle_id}/status`.
+- Two integration tests: found (200 + correct body) and not found (404).
+
+### Corrections and redirections
+
+- `test_vehicles_pagination_offset` initially asserted `v-off-a` is at absolute offset 0, but the shared SQLite DB already contained `v-a01` from a prior test, which sorts before `v-off-a`. Fix: dynamically find the index of `v-off-a` in the full sorted list before asserting.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `tests/unit/test_anomaly_rules.py` — all 5 rules + pipeline | ✅ 17 unit tests |
+| `tests/integration/test_validation.py` — 5 contract tests | ✅ |
+| `test_vehicles_pagination_offset` — robust offset check | ✅ |
+| `GET /vehicles/{vehicle_id}` — 200 or 404 | ✅ |
+| Integration tests for new endpoint | ✅ 2 tests |
+| `pytest -v` | ✅ 50 passed |
+| `ruff check .` / `mypy app/` | ✅ Clean (36 source files) |

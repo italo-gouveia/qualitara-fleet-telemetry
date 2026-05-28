@@ -43,3 +43,22 @@ async def get_all_vehicle_states(
         )
         for vs in rows.scalars()
     ]
+
+
+async def get_vehicle_by_id(
+    vehicle_id: str, session: AsyncSession
+) -> VehicleStateResponse | None:
+    row = await session.execute(
+        select(VehicleState).where(VehicleState.vehicle_id == vehicle_id)
+    )
+    vs = row.scalar_one_or_none()
+    if vs is None:
+        return None
+    return VehicleStateResponse(
+        vehicle_id=vs.vehicle_id,
+        status=vs.status,
+        battery_pct=vs.battery_pct,
+        lat=vs.lat,
+        lon=vs.lon,
+        updated_at=vs.updated_at,
+    )

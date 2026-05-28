@@ -5,6 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.vehicle import MaintenanceRecord, Mission, VehicleState
+from app.repositories.vehicle_repository import get_vehicle_by_id
+from app.schemas.fleet import VehicleStateResponse
 from app.schemas.telemetry import VehicleStatus
 from app.schemas.vehicle import StatusUpdateResponse
 
@@ -15,6 +17,14 @@ class VehicleNotFound(Exception):
     def __init__(self, vehicle_id: str) -> None:
         super().__init__(f"Vehicle {vehicle_id!r} not found")
         self.vehicle_id = vehicle_id
+
+
+async def get_vehicle(vehicle_id: str, session: AsyncSession) -> VehicleStateResponse:
+    """Return a single vehicle by ID; raises VehicleNotFound if absent."""
+    result = await get_vehicle_by_id(vehicle_id, session)
+    if result is None:
+        raise VehicleNotFound(vehicle_id)
+    return result
 
 
 async def update_vehicle_status(

@@ -3,10 +3,26 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path, status
 
 from app.database import SessionDep
+from app.schemas.fleet import VehicleStateResponse
 from app.schemas.vehicle import StatusUpdateRequest, StatusUpdateResponse
-from app.services.vehicle import VehicleNotFound, update_vehicle_status
+from app.services.vehicle import VehicleNotFound, get_vehicle, update_vehicle_status
 
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
+
+
+@router.get(
+    "/{vehicle_id}",
+    response_model=VehicleStateResponse,
+    summary="Get a single vehicle by ID",
+)
+async def get_vehicle_by_id(
+    vehicle_id: Annotated[str, Path(min_length=1, max_length=20)],
+    session: SessionDep,
+) -> VehicleStateResponse:
+    try:
+        return await get_vehicle(vehicle_id, session)
+    except VehicleNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.patch(

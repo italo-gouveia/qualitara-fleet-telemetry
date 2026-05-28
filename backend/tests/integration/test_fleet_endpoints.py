@@ -87,3 +87,37 @@ async def test_vehicles_pagination_limit(client: AsyncClient) -> None:
     response = await client.get("/vehicles?limit=1&offset=0")
     assert response.status_code == 200
     assert len(response.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_vehicles_pagination_offset(client: AsyncClient) -> None:
+    """Offset skips the correct number of rows regardless of other seeded vehicles."""
+    for vehicle_id in ["v-off-a", "v-off-b", "v-off-c"]:
+        await client.post("/telemetry", json=make_event(vehicle_id=vehicle_id))
+
+    # Find the absolute position of our marker vehicle in the sorted list
+    all_ids = [v["vehicle_id"] for v in (await client.get("/vehicles?limit=100")).json()]
+    idx = all_ids.index("v-off-a")
+
+    at_a = await client.get(f"/vehicles?limit=1&offset={idx}")
+    at_b = await client.get(f"/vehicles?limit=1&offset={idx + 1}")
+
+    assert at_a.json()[0]["vehicle_id"] == "v-off-a"
+    assert at_b.json()[0]["vehicle_id"] == "v-off-b"
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_by_id_returns_state(client: AsyncClient) -> None:
+    await client.post("/telemetry", json=make_event(vehicle_id="v-detail", status="charging"))
+
+    response = await client.get("/vehicles/v-detail")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["vehicle_id"] == "v-detail"
+    assert body["status"] == "charging"
+
+
+@pytest.mark.asyncio
+async def test_get_vehicle_by_id_not_found_returns_404(client: AsyncClient) -> None:
+    response = await client.get("/vehicles/v-does-not-exist")
+    assert response.status_code == 404
