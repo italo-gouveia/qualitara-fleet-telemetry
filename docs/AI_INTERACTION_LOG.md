@@ -765,3 +765,9 @@ None — first attempt clean.
 | Grafana anonymous viewer access enabled | ✅ |
 | README Quick Start shows all 5 URLs with notes | ✅ |
 | `pytest -v` | ✅ 55 passed (no app code changed) |
+
+### Post-interaction fix — docker-compose healthcheck
+
+**Bug:** On first `docker compose up --build`, Prometheus and Grafana failed to start with `dependency failed to start: container backend is unhealthy`. Root cause: the healthcheck command `curl -f http://localhost:8000/health` relied on `curl`, which is not installed in `python:3.12-slim`.
+
+**Fix (commit `fix(docker)`):** replaced the `test` with `["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]` — uses Python's stdlib `urllib`, always available in the image. Committed and pushed to `origin/main`.
