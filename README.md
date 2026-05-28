@@ -47,9 +47,9 @@ Real-time monitoring service for 50 autonomous industrial vehicles emitting tele
 | Logging | `python-json-logger` — structured JSON in prod, text in dev; `X-Request-Id` propagation |
 | Metrics | `prometheus-fastapi-instrumentator` → Prometheus → Grafana (auto-provisioned) |
 | Database | PostgreSQL 16 (production / Docker) · SQLite + aiosqlite (tests) |
-| Frontend | React 18, TypeScript, Vite, TanStack Query v5 — Fleet summary, Vehicle list, Zone counts, **Anomalies panel** |
+| Frontend | React 18, TypeScript, Vite, TanStack Query v5 — Fleet summary, **Live vehicle map** (react-leaflet/OSM), Vehicle list, Zone counts, **Anomalies panel** |
 | Tests (backend) | pytest-asyncio, httpx ASGITransport — **71 tests** |
-| Tests (frontend) | Vitest + Testing Library (unit + MSW integration) — **39 tests**; Playwright E2E (Chromium) — **11 scenarios** |
+| Tests (frontend) | Vitest + Testing Library (unit + MSW integration) — **46 tests**; Playwright E2E (Chromium) — **11 scenarios** |
 | Container | Docker Compose · full stack + optional Locust load-test profile |
 | CI | GitHub Actions — 3 parallel jobs: backend (pytest/ruff/mypy), frontend (vitest/build/tsc), e2e (Playwright) |
 
@@ -137,7 +137,7 @@ mypy app/        # type checking
 
 ```bash
 cd frontend
-npm test               # Vitest — 39 unit + integration tests (MSW)
+npm test               # Vitest — 46 unit + integration tests (MSW)
 npm run test:e2e       # Playwright — 11 E2E scenarios (Chromium, API mocked)
 npm run test:coverage  # Vitest with V8 coverage report
 ```
@@ -177,7 +177,7 @@ Current design handles 50 vehicles at 1 Hz comfortably on a single PostgreSQL in
 | Ingest throughput | Synchronous DB write per request | Write-ahead queue (Kafka / Redis Streams) + async consumer group |
 | Zone counters | PostgreSQL row lock | Redis `INCR` (lock-free, sub-ms); periodic DB sync |
 | Fleet aggregate | Live `GROUP BY` on every poll | Materialized view refreshed every N seconds |
-| Dashboard delivery | HTTP polling every 2 s | Server-Sent Events or WebSocket + Redis Pub/Sub |
+| Dashboard delivery | HTTP polling every 2 s | **Step 1:** FastAPI `BackgroundTasks` + WebSocket/SSE (zero new infra, decouples push from request cycle) → **Step 2:** Redis Pub/Sub fan-out for horizontal scale |
 | Anomaly detection | Synchronous, in-request | **Step 1:** FastAPI `BackgroundTasks` (decouples from HTTP latency, zero new infra) → **Step 2:** Kafka/Redis Streams consumer group |
 | Database | Single Postgres instance | Read replicas for query endpoints; pgBouncer connection pool |
 
@@ -236,12 +236,12 @@ Identified improvements that are out of scope for the current delivery but are w
 ### Frontend and dashboard
 | Enhancement | Notes |
 |---|---|
-| **Geospatial vehicle map (Leaflet)** | All vehicles expose `lat`/`lon`; `react-leaflet` (no API key) could show a live map with markers coloured by status, updating every 2 s — strong visual differentiator |
 | **Sorting on the vehicle table** | Click column headers to sort by battery, status, last update |
 | **Client-side filtering on anomalies panel** | Filter by type or vehicle ID without a new API call |
 | **Vehicle detail drill-down** | Click a vehicle row → modal or side panel with full missions and maintenance history |
 | **Historical time-series charts** | DB schema already stores all telemetry events; add charts for battery trend, speed over time per vehicle |
-| **WebSocket / SSE push** | Replace 2 s polling with Server-Sent Events — reduces latency and server load at scale |
+| **WebSocket / SSE push** | Replace 2 s polling with push; realistic path: **Step 1** — FastAPI `BackgroundTasks` + WebSocket endpoint (zero new infra) → **Step 2** — Redis Pub/Sub fan-out for multi-instance deployments |
+| **Leaflet map enhancements** | Current map shows vehicle positions + anomaly rings; potential additions: zone boundary polygons, vehicle trail history, clustering at lower zoom, click-through to vehicle detail panel |
 
 ### Infrastructure and observability
 | Enhancement | Notes |

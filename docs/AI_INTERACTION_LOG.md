@@ -1373,3 +1373,57 @@ Full-width panel with three columns: Vehicle ID (monospace), Type (badge), Detec
 | `npm run build` | ✅ clean |
 | `docker compose build` | ✅ frontend image builds with `.npmrc` in place |
 | AnomaliesPanel visible in running stack | ✅ |
+
+---
+
+## Interaction 30 — Prompt 28: Live Vehicle Map (Leaflet) + Makefile Improvements
+
+### Prompt issued
+
+> Add a live geospatial vehicle map using react-leaflet so the existing lat/lon fields are visualised. Vehicles should be shown as coloured markers by status, with a dashed anomaly ring for vehicles with active anomalies and a popup with vehicle detail. Also expand the Makefile with useful developer shortcuts (simulate, reset, logs, load-test, etc.) and update the roadmap to reflect BackgroundTasks as a realistic first step for WebSocket/SSE push before Redis Pub/Sub.
+
+### What was built
+
+**`frontend/src/components/VehicleMap.tsx`** (new)
+Full-width panel rendered with `react-leaflet` + OpenStreetMap tiles (no API key). Vehicles appear as `CircleMarker` elements coloured by status: green (`#22c55e`) = moving, blue (`#3b82f6`) = charging, slate (`#64748b`) = idle, red (`#ef4444`) = fault. Vehicles present in the current anomalies window get a dashed red `CircleMarker` ring (radius 14, non-interactive). Each marker has a `Tooltip` (vehicle ID + status on hover) and a `Popup` (vehicle ID, status, battery %, coordinates, anomaly alert if applicable). A status legend with colour dots and a dashed ring indicator sits below the map.
+
+**`frontend/src/App.tsx`** — `<VehicleMap />` inserted between `<FleetSummary />` and the panels grid so the map is the first thing visible after the summary.
+
+**`frontend/src/App.css`** — `.map-panel`, `.map-legend`, `.legend-item`, `.legend-dot`, `.legend-ring`, `.map-popup`, `.map-popup-id`, `.map-popup-coord`, `.map-popup-alert` styles.
+
+**`frontend/package.json`** — `leaflet` + `react-leaflet` added as runtime deps; `@types/leaflet` as devDependency. No API key required; tiles served by OpenStreetMap.
+
+**`Makefile`** — Expanded from 4 targets to 14:
+- `help` — prints all targets with descriptions
+- `test` / `test-frontend` / `test-e2e` / `lint` — testing and quality gates
+- `up` / `up-detached` / `down` / `reset` / `logs` / `ps` — Docker stack lifecycle (`reset` = `down -v && up --build`)
+- `dev` / `migrate` / `simulate` — local development (`simulate` runs `backend/scripts/simulate_fleet.py` against localhost:8000)
+- `load-test` — starts full stack + Locust profile
+
+**`README.md`** — Stack table updated (46 frontend tests, Leaflet map listed); scalability roadmap Dashboard delivery row updated to show BackgroundTasks + WebSocket/SSE as Step 1 before Redis Pub/Sub; Future Enhancements updated — Leaflet map row replaced with Leaflet enhancement ideas (zone polygons, trail history, clustering); SSE/WebSocket entry now describes the BackgroundTasks-first path.
+
+### Tests added
+
+**Unit (7 new, `VehicleMap.test.tsx`):** `react-leaflet` fully stubbed for jsdom (no canvas/SVG APIs needed); covers loading state, error state, map container rendered, vehicle count badge, popup content (vehicle ID + battery), anomaly alert in popup, status legend with all four statuses + anomaly label.
+
+### Architecture note — BackgroundTasks before Kafka
+
+The scalability roadmap now explicitly documents the two-step push path:
+- **Step 1 (zero new infra):** FastAPI `BackgroundTasks` emits state over a WebSocket endpoint; suitable up to moderate concurrency without introducing a message broker
+- **Step 2 (horizontal scale):** Redis Pub/Sub fan-out so multiple backend instances can push to the same client pool
+
+This mirrors the anomaly detection pattern (synchronous → BackgroundTasks → Kafka) already documented in the scalability table.
+
+### Corrections and redirections
+
+- Initial `VehicleMap` unit test used `getByText` for strings that appear in both the stubbed `Tooltip` and `Popup` components, causing "multiple elements found" failures. Fixed by switching to `getAllByText` where text duplication is expected and `getByText` only where the string is unique (e.g., `"anomaly"` in the legend).
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `npm test` — unit + integration | ✅ 46 passed |
+| `npx tsc -b --noEmit` | ✅ clean |
+| `npm run build` | ✅ clean |
+| VehicleMap visible in running stack | ✅ |
+| `make help` lists all targets | ✅ |

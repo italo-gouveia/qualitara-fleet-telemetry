@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { FleetSummary } from "./components/FleetSummary";
+import { VehicleMap } from "./components/VehicleMap";
 import { VehicleList } from "./components/VehicleList";
 import { ZoneCountsPanel } from "./components/ZoneCountsPanel";
 import { AnomaliesPanel } from "./components/AnomaliesPanel";
@@ -17,6 +18,7 @@ export default function App() {
         </header>
         <main className="dashboard">
           <FleetSummary />
+          <VehicleMap />
           <div className="panels">
             <VehicleList />
             <ZoneCountsPanel />

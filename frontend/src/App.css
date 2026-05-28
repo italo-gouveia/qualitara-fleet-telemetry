@@ -118,3 +118,43 @@ body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; 
 .anomaly-table th { color: #64748b; font-weight: 500; }
 .anomaly-vehicle { font-family: monospace; font-size: 0.8rem; color: #94a3b8; }
 .anomaly-empty { color: #64748b; font-size: 0.875rem; padding: 0.5rem 0; }
+
+/* ── Vehicle Map ──────────────────────────────────────────────────────────── */
+.map-panel { padding-bottom: 1rem; }
+
+/* Leaflet container sits in normal document flow; keep it below fixed headers */
+.leaflet-container { font-family: system-ui, sans-serif; }
+
+.map-legend {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-transform: capitalize;
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.legend-ring {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px dashed #ef4444;
+  flex-shrink: 0;
+}
+
+/* Popup content (light mode override for Leaflet's default white popup) */
+.map-popup { font-size: 0.8rem; line-height: 1.5; }
+.map-popup-id { font-weight: 700; font-size: 0.875rem; margin-bottom: 0.25rem; }
+.map-popup-coord { color: #6b7280; font-size: 0.7rem; margin-top: 0.25rem; }
+.map-popup-alert { color: #ef4444; font-weight: 600; margin-top: 0.25rem; }

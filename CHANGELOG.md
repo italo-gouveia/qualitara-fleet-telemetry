@@ -100,6 +100,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `frontend/package.json`: `@testing-library/dom@^10.4.0` added as explicit `devDependency` — required because `legacy-peer-deps` mode stops auto-installing packages marked `"peer": true` in the lock file
 - `frontend/package-lock.json`: regenerated
 
+#### Live vehicle map (Leaflet) + Makefile improvements — Interaction 30
+- `frontend/src/components/VehicleMap.tsx`: full-width live map panel using `react-leaflet` + OpenStreetMap tiles (no API key); vehicle positions as `CircleMarker`s coloured by status (green=moving, blue=charging, slate=idle, red=fault); dashed anomaly ring overlay for vehicles with active anomalies; popup with vehicle ID, status, battery %, coordinates and anomaly alert; Tooltip on hover; status legend with colour dots and dashed anomaly ring indicator
+- `frontend/src/hooks/useVehicles.ts`: existing hook reused — 2 s refetch interval, TanStack Query deduplicates the request shared with `VehicleList`
+- `frontend/src/hooks/useAnomalies.ts`: reused for anomaly ring overlay — vehicles with any anomaly in the current window get the dashed red ring
+- `frontend/src/App.tsx`: `VehicleMap` wired between `FleetSummary` and the panels grid
+- `frontend/src/App.css`: `.map-panel`, `.map-legend`, `.legend-dot`, `.legend-ring`, `.map-popup*` styles added
+- `frontend/src/test/VehicleMap.test.tsx`: 7 unit tests — loading, error, map container, count badge, popup content, anomaly alert, legend — react-leaflet fully stubbed for jsdom
+- `frontend/package.json`: `leaflet` + `react-leaflet` added as runtime deps; `@types/leaflet` as devDependency
+- `Makefile`: expanded with `up-detached`, `reset`, `logs`, `ps`, `migrate`, `simulate`, `test-frontend`, `test-e2e`, `lint`, `help` targets; `simulate` runs `backend/scripts/simulate_fleet.py` against localhost:8000; `load-test` starts the Locust profile
+- `README.md`: stack table updated (46 frontend tests, Leaflet map in Frontend row); scalability roadmap updated — Dashboard delivery row now shows BackgroundTasks + WebSocket/SSE as Step 1 before Redis Pub/Sub; Future Enhancements updated — Leaflet map row replaced with Leaflet enhancement ideas; SSE/WebSocket entry describes BackgroundTasks-first path
+
 #### Architecture decisions completeness — Interaction 26
 - `docs/ADR.md`: Decisions 5–9 added to document all major architectural choices made during implementation:
   - Decision 5: Async Python stack (FastAPI + SQLAlchemy 2.x async + asyncpg) — rationale, asyncpg performance, Pydantic v2, async discipline trade-offs
