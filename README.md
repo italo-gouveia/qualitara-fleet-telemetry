@@ -58,11 +58,15 @@ Requires Docker Desktop or Docker Engine + Compose v2.
 docker compose up --build
 ```
 
-| Service | URL |
-|---------|-----|
-| Dashboard | http://localhost:5173 |
-| API | http://localhost:8000 |
-| Swagger UI | http://localhost:8000/docs |
+| Service | URL | Notes |
+|---------|-----|-------|
+| Dashboard | http://localhost:5173 | React live dashboard |
+| API | http://localhost:8000 | FastAPI backend |
+| Swagger UI | http://localhost:8000/docs | Interactive API docs |
+| Prometheus | http://localhost:9090 | Scrapes `/metrics` every 15s |
+| Grafana | http://localhost:3000 | admin / admin — anonymous viewer enabled |
+
+To add a Grafana dashboard: **Connections → Add data source → Prometheus → URL `http://prometheus:9090`**.
 
 The backend waits for PostgreSQL's healthcheck, runs `alembic upgrade head` automatically, then starts Uvicorn. Zones are seeded on first startup via `ON CONFLICT DO NOTHING`.
 

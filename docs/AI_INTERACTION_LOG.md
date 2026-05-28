@@ -730,3 +730,38 @@ Added to `app` in `main.py` before `CORSMiddleware`.
 | `test_observability.py` — 5 tests (500, request-id x2, metrics, health) | ✅ |
 | `pytest -v` | ✅ 55 passed |
 | `ruff check .` / `mypy app/` | ✅ Clean (36 source files) |
+
+---
+
+## Interaction 18 — Prompt 18: Prometheus and Grafana in Docker Compose
+
+### Prompt issued
+
+> The backend exposes GET /metrics but no Prometheus server scrapes it. Add prometheus and grafana services to docker-compose.yml so the full observability stack runs with a single `docker compose up --build`. Add prometheus/prometheus.yml scrape config. Update README Quick Start table with all 5 URLs.
+
+### Output summary
+
+**`prometheus/prometheus.yml`** — scrape config with `scrape_interval: 15s`, job `fleet-backend` targeting `backend:8000` at `/metrics`.
+
+**`docker-compose.yml`** — two new services:
+- `prometheus` (prom/prometheus:v2.52.0) — mounts `./prometheus/prometheus.yml` read-only, port 9090, `depends_on: backend: condition: service_healthy`.
+- `grafana` (grafana/grafana:10.4.3) — port 3000, admin/admin credentials, anonymous viewer enabled (`GF_AUTH_ANONYMOUS_ENABLED=true`, `GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer`), `depends_on: prometheus`.
+
+**README Quick Start table** — expanded from 3 to 5 rows with Notes column; added Grafana datasource setup instruction.
+
+No application code changed — 55 tests still pass.
+
+### Corrections and redirections
+
+None — first attempt clean.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `prometheus/prometheus.yml` with correct scrape target | ✅ |
+| `docker-compose.yml` has prometheus + grafana services | ✅ |
+| `prometheus` depends on `backend: service_healthy` | ✅ |
+| Grafana anonymous viewer access enabled | ✅ |
+| README Quick Start shows all 5 URLs with notes | ✅ |
+| `pytest -v` | ✅ 55 passed (no app code changed) |
