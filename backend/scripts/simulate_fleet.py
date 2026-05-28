@@ -14,12 +14,12 @@ from datetime import UTC, datetime
 import httpx
 
 ZONES = [
-    "inbound_dock_a", "inbound_dock_b", "outbound_dock_a", "outbound_dock_b",
-    "charging_bay_1", "charging_bay_2", "charging_bay_3", "charging_bay_4",
-    "storage_zone_a", "storage_zone_b", "storage_zone_c", "storage_zone_d",
-    "assembly_line_1", "assembly_line_2", "assembly_line_3",
-    "inspection_area", "maintenance_bay", "dispatch_area",
-    "corridor_north", "corridor_south",
+    "inbound_dock_a", "inbound_dock_b", "receiving_staging",
+    "aisle_a", "aisle_b", "aisle_c",
+    "high_bay_1", "high_bay_2", "bulk_storage",
+    "pick_zone_1", "pick_zone_2", "pack_station", "sort_belt",
+    "outbound_dock_a", "outbound_dock_b", "shipping_staging",
+    "charging_bay_1", "charging_bay_2", "charging_bay_3", "maintenance_bay",
 ]
 
 STATUSES = ["idle", "moving", "charging"]
