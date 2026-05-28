@@ -813,6 +813,14 @@ Uses `${DS_PROMETHEUS}` template variable with `__inputs` block for proper provi
 | `docker compose up --build` → Grafana opens with populated dashboard | ✅ |
 | `pytest -v` | ✅ 55 passed (no app code changed) |
 
+### Post-interaction fix — Grafana datasource UID mismatch
+
+**Bug:** After running the full stack with `--profile load-test`, all 4 Grafana panels showed "No data" with warning triangles. Prometheus was scraping correctly (`health: up`, last scrape confirmed via API) and metrics existed (`http_requests_total`, `http_request_duration_seconds_bucket`). Root cause: the `${DS_PROMETHEUS}` template variable in `fleet.json` is an **import-time substitution** mechanism (for UI imports) — it is NOT resolved by the Grafana filesystem provisioner. The datasource YAML had no fixed `uid`, so Grafana auto-generated `PBFA97CFB590B2093`; the dashboard panels referenced `${DS_PROMETHEUS}` which remained unresolved, causing all queries to fail silently.
+
+**Fix:** Added `uid: prometheus` to `grafana/provisioning/datasources/prometheus.yml` (makes UID deterministic across container restarts) and replaced all four `"uid": "${DS_PROMETHEUS}"` references in `fleet.json` with `"uid": "prometheus"`. Restarted only the Grafana container (`docker compose restart grafana`) — Locust and the rest of the stack continued running uninterrupted. Dashboard populated immediately after restart.
+
+**Lesson:** For Grafana filesystem provisioning, always use a hardcoded UID in both the datasource YAML and the dashboard JSON. The `${DS_PROMETHEUS}` / `__inputs` pattern is only for dashboards exported from the UI and re-imported manually.
+
 ---
 
 ## Interaction 20 — Prompt 20: Load Test with Locust

@@ -24,7 +24,7 @@
       "title": "Request Rate (req/s)",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "sum(rate(http_requests_total[1m])) by (handler, method)",
@@ -45,7 +45,7 @@
       "title": "P95 Latency (s)",
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[1m])) by (le, handler))",
@@ -65,7 +65,7 @@
       "title": "5xx Error Rate",
       "type": "stat",
       "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "sum(rate(http_requests_total{status=~\"5..\"}[1m]))",
@@ -94,7 +94,7 @@
       "title": "Requests by Status (last 5 min)",
       "type": "bargauge",
       "gridPos": { "x": 6, "y": 8, "w": 18, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "sum by (status) (increase(http_requests_total[5m]))",
