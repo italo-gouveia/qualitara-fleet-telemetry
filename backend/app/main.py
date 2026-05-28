@@ -8,15 +8,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.core.zones import ZONES
-from app.database import AsyncSessionLocal, Base, engine
-from app.models import (  # noqa: F401 -- registers all models with Base.metadata
-    Anomaly,
-    MaintenanceRecord,
-    Mission,
-    TelemetryEvent,
-    VehicleState,
-    ZoneCount,
-)
+from app.database import AsyncSessionLocal, engine
 from app.routers.anomaly import router as anomaly_router
 from app.routers.fleet import router as fleet_router
 from app.routers.telemetry import router as telemetry_router
@@ -30,8 +22,6 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     db_host = settings.database_url.split("@")[-1]
     logger.info("Starting Fleet Telemetry Monitor", extra={"db": db_host})
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     await _seed_zone_counts()
     yield
     await engine.dispose()

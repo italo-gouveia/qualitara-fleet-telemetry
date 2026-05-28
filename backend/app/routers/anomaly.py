@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
-from app.repositories.anomaly_repository import get_anomalies
 from app.schemas.anomaly import AnomalyResponse
+from app.services.anomaly import query_anomalies
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
 
@@ -19,14 +19,6 @@ async def list_anomalies(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     session: AsyncSession = Depends(get_session),
 ) -> list[AnomalyResponse]:
-    rows = await get_anomalies(session, vehicle_id=vehicle_id, start=start, end=end, limit=limit)
-    return [
-        AnomalyResponse(
-            id=row.id,
-            vehicle_id=row.vehicle_id,
-            detected_at=row.detected_at,
-            type=row.type,
-            detail=row.detail,
-        )
-        for row in rows
-    ]
+    return await query_anomalies(
+        session, vehicle_id=vehicle_id, start=start, end=end, limit=limit
+    )

@@ -446,6 +446,51 @@ None — first attempt passed structural review.
 
 ---
 
+## Interaction 12 — Prompt 12: Architecture Consistency & Staff-Level Polish
+
+### Prompt issued
+> Self-review pass: (1) enforce `router → service → repository` consistently across all four routers; (2) remove `Base.metadata.create_all` from lifespan — Alembic is the sole schema owner; (3) overhaul README to staff/principal level: architecture diagram, scalability roadmap, observability section, non-goals, reframed AI usage note.
+
+### Output summary
+
+**Architecture fix — service layer for fleet and anomaly:**
+- Created `app/services/fleet.py` — `get_fleet_state`, `get_vehicles`, `get_zone_counts` delegating to repositories.
+- Created `app/services/anomaly.py` — `query_anomalies` delegating to `anomaly_repository` and mapping to `AnomalyResponse`.
+- Updated `routers/fleet.py` and `routers/anomaly.py` to import from services only — repositories no longer imported directly by any router.
+- All four routers now follow the same `router → service → repository` pattern.
+
+**Lifespan cleanup:**
+- Removed `Base.metadata.create_all` from `main.py` lifespan. Alembic (`entrypoint.sh` runs `alembic upgrade head`) is now the sole schema owner.
+- Removed `Base` import and the `noqa: F401` model block that only existed to populate `Base.metadata` for `create_all`.
+- `_seed_zone_counts()` and `engine.dispose()` retained — data seeding and connection cleanup are still valid lifespan concerns.
+
+**README rewrite:**
+- Added ASCII architecture diagram showing full data flow end-to-end.
+- Added **Scalability Roadmap** table: current vs. next-step for 6 bottlenecks at 10× load.
+- Added **Observability** section: what's in (structured logs, `/health`) and natural next additions (Prometheus, OTEL).
+- Added **Non-Goals** table: 6 items explicitly out of scope with rationale.
+- Updated **AI Usage** to clarify that architecture decisions, concurrency patterns, and trade-off reasoning are the author's; AI was used as a coding accelerator.
+
+**Deferred (documented in prompt, not implemented):**
+- TestContainers: replaces in-memory SQLite with a real PostgreSQL container in tests; deferred due to Docker-in-Docker CI complexity and challenge time window.
+- Repository-as-class with constructor injection: cleaner DI pattern; deferred to avoid full-repo refactor within challenge window.
+
+### Corrections and redirections
+
+None — first attempt passed all checks.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| All 4 routers follow `router → service → repository` | ✅ |
+| `Base.metadata.create_all` removed from lifespan | ✅ |
+| `pytest -v` | ✅ 23 passed |
+| `ruff check .` / `mypy app/` | ✅ All checks passed |
+| README has architecture diagram, scalability roadmap, observability, non-goals | ✅ |
+
+---
+
 ## Reflection
 
 - **What AI was good at**: boilerplate generation at speed — Pydantic schemas, FastAPI routers, SQLAlchemy model declarations, pytest fixtures, and TypeScript types all came out correct on the first pass or with one small correction. Following explicit rule files (database.md, code-quality.md) consistently reduced the number of cycles needed per feature.
