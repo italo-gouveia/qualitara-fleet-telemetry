@@ -1198,3 +1198,98 @@ Three interrelated TypeScript errors caught by `tsc -b`:
 | ADR Decision 4 added | ✅ |
 | Stale Docker Compose entry removed from ADR | ✅ |
 | README stack table + Run Tests updated | ✅ |
+
+---
+
+## Interaction 26 — ADR Completeness: Decisions 5–9
+
+### Prompt issued
+
+> The ADR is missing things — where are all the decisions?
+
+### Root cause
+
+`docs/ADR.md` only had 4 decisions (PostgreSQL/SQLite duality, polling vs WebSocket, synchronous anomaly detection, testing pyramid). Five major architectural choices made during implementation were undocumented:
+1. Async Python stack selection
+2. Three-layer router → service → repository architecture
+3. Observability stack (Prometheus + Grafana + structured logging)
+4. Docker Compose service ordering and idempotent migrations
+5. API contract design (REST resources, pagination, error shape)
+
+### What was added
+
+**Decision 5 — Async Python stack: FastAPI + SQLAlchemy 2.x async + asyncpg**
+
+Rationale for choosing async over WSGI/threads: 50 concurrent ingest requests, asyncpg's 2–3× performance advantage over psycopg2 in async benchmarks, Pydantic v2's Rust core, and FastAPI's zero-cost OpenAPI generation. Documents the discipline required (no blocking calls in `async def`) and the SQLAlchemy `autobegin` session-commit subtlety discovered during implementation.
+
+**Decision 6 — Architecture layering: router → service → repository**
+
+Justification for three-layer separation over flat fat-router handlers: testability (each layer independently testable), SRP (one reason to change per layer), reusability (`get_vehicle_by_id` called by 3 services), readability (route handlers become 3–5 lines). Documents the trade-off of additional ceremony for simple read-only endpoints.
+
+**Decision 7 — Observability stack: structured logging + Prometheus + Grafana**
+
+Rationale for `python-json-logger` (ELK/CloudWatch compatible), `prometheus-fastapi-instrumentator` (zero-config HTTP metrics), and Grafana filesystem provisioner. Includes the **key operational lesson** discovered in production: Grafana's `${DS_PROMETHEUS}` template variable is only resolved during manual UI import, not by the filesystem provisioner — requires a hardcoded `uid: prometheus` in both the datasource YAML and every panel reference.
+
+**Decision 8 — Docker Compose: health checks, service ordering, idempotent migrations**
+
+Documents `condition: service_healthy` over `condition: service_started`, why Python stdlib `urllib` was chosen for the backend healthcheck (no `curl` in `python:3.12-slim`, discovered when healthcheck silently failed), and Alembic as sole schema owner (`Base.metadata.create_all` removed from lifespan).
+
+**Decision 9 — API contract: RESTful resources, consistent pagination, unified error shape**
+
+Documents `{"detail": "..."}` alignment with FastAPI's validation error format (single frontend error-handling path), `limit`/`offset` on every list endpoint, three-point `vehicle_id` validation (Pydantic schema + `Path(...)` + `Query(...)`), and `503` (not `200`) on health endpoint DB failure (load-balancer correct semantics).
+
+### Corrections and redirections
+
+None — this was a gap-filling exercise. All decisions were already implemented; this interaction documents the reasoning that was implicit in the code.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| ADR has all major decisions documented | ✅ 9 decisions total |
+| Decision 5: async stack rationale | ✅ |
+| Decision 6: layering rationale | ✅ |
+| Decision 7: observability + Grafana UID lesson | ✅ |
+| Decision 8: health checks + migrations | ✅ |
+| Decision 9: API contract design | ✅ |
+| Unclear constraints and assumptions table | ✅ (unchanged, still accurate) |
+| 10× scale analysis | ✅ (unchanged, still accurate) |
+
+---
+
+## Interaction 27 — CI Fix: npm peer-dep mismatch between npm 10 and npm 11
+
+### Prompt issued
+
+> `npm ci` still failing in CI — missing `esbuild@0.28.0` from lock file.
+
+### Root cause
+
+vitest@4.1.7 bundles its own nested vite@8.0.14. vite@8 declares esbuild as an **optional** peer dependency (`^0.27.0 || ^0.28.0`). The lock file was generated locally with **npm 11.x** (Node 24 / Windows), which tolerates the optional peer dep resolution gap. GitHub Actions uses **npm 10.x** (Node 22 / ubuntu-latest), which strictly validates the lock file against all peer deps — including optional ones — and fails with "Missing: esbuild@0.28.0 from lock file".
+
+A secondary issue appeared after the fix: once `legacy-peer-deps=true` was set, `@testing-library/dom` stopped being auto-installed (it was marked `"peer": true` in the lock file). Without an explicit `devDependency`, `npm ci` in legacy mode skips it and `@testing-library/react` cannot resolve it at runtime.
+
+### Fixes
+
+**`frontend/.npmrc`** — created:
+```
+legacy-peer-deps=true
+```
+Makes npm 10.x in CI behave consistently with npm 11.x locally for peer dep conflict resolution.
+
+**`frontend/package.json`** — added explicit devDependency:
+```json
+"@testing-library/dom": "^10.4.0"
+```
+Ensures `@testing-library/dom` is always installed directly, regardless of peer dep auto-install behaviour.
+
+**`frontend/package-lock.json`** — regenerated to reflect both changes.
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `npm ci` clean on fresh directory | ✅ |
+| `npm test` — 29 tests pass after `npm ci` | ✅ |
+| `npm run build` succeeds | ✅ |
+| `npx tsc --noEmit` clean | ✅ |

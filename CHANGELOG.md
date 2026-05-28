@@ -75,6 +75,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/ADR.md`: Decision 4 added (frontend testing pyramid: unit/integration/E2E strategy and rationale); stale "Docker Compose omitted" entry removed
 - README: stack table and Run Tests section updated for full test pyramid and 3-job CI
 
+#### npm ci peer-dep fix — Interaction 27
+- `frontend/.npmrc`: `legacy-peer-deps=true` — aligns npm 10.x (CI / Node 22) with npm 11.x (local / Node 24) for optional peer dep resolution; fixes "Missing: esbuild@0.28.0 from lock file" on `npm ci`
+- `frontend/package.json`: `@testing-library/dom@^10.4.0` added as explicit `devDependency` — required because `legacy-peer-deps` mode stops auto-installing packages marked `"peer": true` in the lock file
+- `frontend/package-lock.json`: regenerated
+
+#### Architecture decisions completeness — Interaction 26
+- `docs/ADR.md`: Decisions 5–9 added to document all major architectural choices made during implementation:
+  - Decision 5: Async Python stack (FastAPI + SQLAlchemy 2.x async + asyncpg) — rationale, asyncpg performance, Pydantic v2, async discipline trade-offs
+  - Decision 6: Three-layer architecture (router → service → repository) — testability, SRP, reusability, trade-off of ceremony for simple endpoints
+  - Decision 7: Observability stack (python-json-logger + Prometheus + Grafana) — includes key lesson on Grafana `${DS_PROMETHEUS}` vs hardcoded UID for filesystem provisioner
+  - Decision 8: Docker Compose health checks and idempotent migrations — `condition: service_healthy`, Python stdlib urllib, Alembic as sole schema owner
+  - Decision 9: API contract (RESTful resources, consistent `limit`/`offset` pagination, `{"detail": ...}` error shape, `503` on health DB failure)
+
 ### Changed
 
 - Frontend Docker image upgraded from `node:20-alpine` to `node:22-alpine` (Node 22 LTS); CI updated to `node-version: "22"`; `engines: { node: ">=22.0.0" }` added to `package.json`

@@ -114,6 +114,142 @@ No TestContainers — the backend integration tests use in-memory SQLite, not re
 
 ---
 
+### Decision 5 — Async Python stack: FastAPI + SQLAlchemy 2.x async + asyncpg
+
+**Context**
+
+50 vehicles at 1 Hz produce 50 concurrent ingest requests at peak. Python's GIL makes thread-based concurrency (WSGI + thread pool) practical but wasteful — each blocked DB call holds a thread. The stack choice determines whether the service can saturate PostgreSQL connection throughput without over-provisioning workers.
+
+**Decision**
+
+FastAPI (ASGI) with `async def` handlers, SQLAlchemy 2.x `AsyncSession`, and `asyncpg` as the PostgreSQL driver. Pydantic v2 for request/response validation.
+
+**Why**
+
+- **FastAPI + Starlette ASGI**: single-worker event loop handles many concurrent requests while waiting for I/O; no thread context switching overhead.
+- **asyncpg**: the fastest Python PostgreSQL driver (pure async, no libpq dependency); outperforms psycopg2 in async benchmarks by 2–3×.
+- **SQLAlchemy 2.x async**: same ORM API as sync SQLAlchemy (familiar) but returns coroutines; supports `select()` composable queries and explicit session management.
+- **Pydantic v2**: Rust-based validation core; near-zero overhead on the hot ingest path vs. v1.
+- **FastAPI auto-docs**: OpenAPI + Swagger UI generated from type annotations at zero cost — spec requirement satisfied without a separate documentation step.
+
+**Trade-off**
+
+Async Python requires discipline: no blocking calls inside `async def` (no `time.sleep`, no sync file I/O, no sync ORM calls). Mixing sync and async code is a silent performance trap. Mitigated by consistent `await` usage and SQLAlchemy's `AsyncSession` throughout.
+
+SQLAlchemy async has subtleties vs. sync: `autobegin` is session-scoped (not statement-scoped), so explicit `await session.commit()` is required at the request boundary. Discovered and corrected during implementation (see AI log, Interaction 3).
+
+---
+
+### Decision 6 — Architecture layering: router → service → repository
+
+**Context**
+
+FastAPI allows writing DB queries directly in route handlers. The simplest approach would be to call `session.execute(select(...))` inside a route function. But the spec calls for business logic (fault transition, anomaly detection, pagination) that would entangle HTTP concerns with domain rules if colocated.
+
+**Decision**
+
+Strict three-layer separation for all endpoints:
+- **Router** — HTTP in/out only: path params, query params, status codes, response models. No DB access.
+- **Service** — business logic and orchestration: validates preconditions (vehicle exists), coordinates repository calls, raises domain exceptions (`VehicleNotFound`).
+- **Repository** — DB queries only: `SELECT`, `INSERT`, `UPDATE`. No business rules. Returns domain objects.
+
+**Why**
+
+- **Testability**: service logic is testable without spinning up an HTTP server; repositories are testable without a router.
+- **SRP**: each layer has one reason to change — HTTP contract changes affect routers only; DB schema changes affect repositories only; business rules change affects services only.
+- **Reusability**: `get_vehicle_by_id` (repository) is called by three different services without duplication.
+- **Readability**: route handlers become 3–5 lines; complex logic lives in named service functions with descriptive names (`update_vehicle_status`, `get_vehicle_missions`).
+
+**Trade-off**
+
+More files and indirection for simple read-only endpoints (e.g. `GET /fleet/state`). A flat "fat router" would be fewer lines. The trade-off pays off when business rules are non-trivial — fault transition, anomaly detection, and pagination consistency across endpoints would be chaotic in flat handlers.
+
+---
+
+### Decision 7 — Observability stack: structured logging + Prometheus + Grafana
+
+**Context**
+
+The spec does not require monitoring. A bare `print()` would technically satisfy it. But a production-grade service needs to be observable — logs parseable by aggregators, metrics inspectable without SSH, and dashboards that light up immediately.
+
+**Decision**
+
+Three-component observability stack:
+1. **Structured JSON logging** via `python-json-logger`; `LOG_FORMAT=text` locally, `json` in Docker.
+2. **Prometheus metrics** via `prometheus-fastapi-instrumentator` (zero-config `http_requests_total` counter + `http_request_duration_seconds` histogram); Prometheus server scrapes `/metrics` every 15 s.
+3. **Grafana** auto-provisioned via filesystem provisioner (datasource YAML + dashboard JSON on disk); 4-panel Fleet dashboard loads on first `docker compose up`.
+4. **Alert rules** in `prometheus/alerts.yml`: `HighErrorRate`, `HighP95Latency`, `BackendDown`.
+
+**Why**
+
+- `python-json-logger` produces machine-readable log lines with structured `extra={}` fields — compatible with ELK, CloudWatch, Datadog log parsers without regex.
+- `prometheus-fastapi-instrumentator` is auto-instrumented — no manual `Counter.inc()` calls needed for standard HTTP metrics.
+- Grafana filesystem provisioner makes the full observability stack reproducible with `docker compose up`; no manual datasource wiring required each restart.
+- `X-Request-Id` propagation via `RequestLoggingMiddleware` allows correlating a dashboard request across multiple log lines.
+
+**Key operational lesson (discovered in production)**
+
+Grafana's `${DS_PROMETHEUS}` template variable in dashboard JSON is resolved **only during manual UI import**, not by the filesystem provisioner. The provisioner requires a **hardcoded datasource UID** (`uid: prometheus` in the datasource YAML, `"uid": "prometheus"` in every panel reference). Using `${DS_PROMETHEUS}` causes all panels to show "No data" silently. This is underdocumented in Grafana's official docs.
+
+**Trade-off**
+
+Prometheus + Grafana add two containers and ~200 MB of memory overhead. For a demo this is fine; for shared production infrastructure they would be centralized services, not embedded in the app's compose file. Alertmanager (notification routing) is intentionally omitted — alert rules are defined, wiring receivers is infra config outside the challenge scope.
+
+---
+
+### Decision 8 — Docker Compose: health checks, service ordering, idempotent migrations
+
+**Context**
+
+Multi-service topology (PostgreSQL → backend → frontend + Prometheus + Grafana) creates startup race conditions. Without ordering, the backend starts before PostgreSQL is accepting connections and fails immediately. Migrations must run on every deploy but be idempotent.
+
+**Decision**
+
+- `depends_on: condition: service_healthy` for every critical dependency (backend waits for `db`, Prometheus waits for `backend`).
+- PostgreSQL healthcheck: `pg_isready -U fleet -d fleet` — socket-level, no password required.
+- Backend healthcheck: `python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"` — Python stdlib, no extra tools in the slim image.
+- Migrations run in `entrypoint.sh`: `alembic upgrade head` before `exec uvicorn …` — idempotent (`alembic` is a no-op if already at head).
+- Alembic is the **sole schema owner** — `Base.metadata.create_all` is not called in application code. This prevents schema drift between environments.
+
+**Why**
+
+- `condition: service_healthy` is strictly better than `condition: service_started` — the latter only waits for the container process to exist, not for the service to be ready to accept connections.
+- Python stdlib `urllib` chosen over `curl` because `python:3.12-slim` doesn't include `curl` (discovered when healthcheck silently failed in early runs).
+- Idempotent migrations mean `docker compose restart backend` (e.g. after a code change) is safe — migrations re-check and skip if already applied.
+- Zone seeding uses `INSERT … ON CONFLICT DO NOTHING` in the FastAPI lifespan — also idempotent, safe on every start.
+
+**Trade-off**
+
+Health check polling adds ~10–15 s to cold start time. Acceptable for a development/demo stack; in Kubernetes this would be a readiness probe with faster failure handling.
+
+---
+
+### Decision 9 — API contract: RESTful resources, consistent pagination, unified error shape
+
+**Context**
+
+The API serves a React dashboard (JSON) and is documented via Swagger UI. Contract consistency reduces frontend coupling and makes the API predictable for new consumers.
+
+**Decision**
+
+- **Resource-oriented URLs**: `/vehicles/{id}`, `/vehicles/{id}/missions`, `/vehicles/{id}/maintenance`, `/anomalies` — nouns, not verbs.
+- **Consistent pagination**: every list endpoint accepts `limit` (1–100) and `offset` (≥0) query params. Anomaly endpoint has `limit` + `offset` + time-range filters.
+- **Error shape**: all errors return `{"detail": "..."}` JSON with appropriate HTTP status. FastAPI's default validation errors (`422`) use the same `detail` key — uniformity for the frontend.
+- **`vehicle_id` validation at all entry points**: `Field(min_length=1, max_length=20)` in Pydantic schema, `Path(...)` in route handler, `Query(...)` in filter params — three-point enforcement prevents injection and truncation bugs.
+- **HTTP semantics**: `POST /telemetry` returns `201 Created`; `PATCH /vehicles/{id}/status` returns `200` with the updated state + side-effect summary (`mission_cancelled`, `maintenance_record_id`); `GET /health` returns `503` (not `200`) when the DB is unreachable — correct semantics for load balancer health checks.
+
+**Why**
+
+- Consistent pagination prevents N+1 on the client side and makes cursor-based pagination a drop-in upgrade later.
+- `{"detail": ...}` alignment with FastAPI defaults means the frontend has one error-handling path for both validation and business errors.
+- `503` on health failure is load-balancer-correct — a `200` health endpoint that hides a broken DB is a classic ops mistake.
+
+**Trade-off**
+
+`{"detail": ...}` is not RFC 7807 (`application/problem+json`) compliant — missing `type`, `title`, `instance`. A public-facing API serving external integrations should implement full RFC 7807. Not a priority for an internal dashboard API.
+
+---
+
 ### Unclear Constraints and Assumptions
 
 | Assumption | Reasoning |
