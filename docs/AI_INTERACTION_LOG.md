@@ -961,3 +961,77 @@ None — first attempt clean.
 | `make load-test` target in Makefile | ✅ |
 | README documents load-test workflow with 6-URL table | ✅ |
 | `pytest -v` | ✅ 55 passed (no app code changed) |
+
+---
+
+## Interaction 23 — Prompt 23: README Refresh, Vitest Frontend Tests, CHANGELOG, Node LTS Migration
+
+### Prompt issued
+
+> Four deliverables in one pass: (1) refresh README — architecture diagram, stack table, API endpoints table, scalability roadmap, non-goals, observability section aligned with what has been built; (2) add Vitest frontend tests for the three main components; (3) create CHANGELOG.md; (4) migrate frontend to Node 22 LTS (CI, Dockerfile, package.json engines).
+
+### Output summary
+
+**README refresh** — updated to reflect the full delivered stack:
+- Architecture diagram extended with Prometheus/Grafana metrics loop and Locust load-test arrow
+- Stack table: added Prometheus, Grafana, Vitest, Locust, GitHub Actions rows
+- API endpoints table: added `/vehicles/{id}/missions`, `/vehicles/{id}/maintenance`, `offset` param on `/anomalies`
+- Run Tests section: updated to 60 backend tests + 9 frontend tests + `npm test` command
+- Scalability Roadmap: Background Tasks (FastAPI + asyncio worker) promoted to Step 1 (before Kafka/RabbitMQ)
+- Non-Goals: added Alertmanager notifications, TestContainers, Background Tasks → Kafka fast-path
+- Observability section: alert rules table (HighErrorRate, HighP95Latency, BackendDown), URL table, alert state lifecycle (`inactive` → `pending` → `firing`)
+
+**Vitest frontend tests** — 9 tests across 3 files:
+
+`tests/FleetSummary.test.tsx` (3 tests):
+- Renders loading state when `isLoading=true`
+- Renders 4 status tiles with correct counts (`10`, `15`, `5`, `2`)
+- Renders total vehicle count in heading (`32 vehicles`)
+
+`tests/ZoneCountsPanel.test.tsx` (3 tests):
+- Renders a row for each zone (underscore → space label transform asserted)
+- Zones sorted descending by count (20 > 3 > 1)
+- `zone-high` CSS class applied to rows with count ≥ 10
+
+`tests/VehicleRow.test.tsx` (3 tests):
+- Renders vehicle ID and status badge
+- Renders battery percentage (`75%`)
+- Applies `row-fault` class when vehicle status is `fault`
+
+All hooks mocked at module level via `vi.mock('../hooks/...')` + `vi.mocked()` — components tested in isolation without TanStack Query.
+
+**`frontend/vite.config.ts`** — added `test: { globals: true, environment: 'jsdom', setupFiles: ['./src/test/setup.ts'] }` block.
+
+**`frontend/src/test/setup.ts`** — `import '@testing-library/jest-dom'` to register DOM matchers.
+
+**`frontend/package.json`** — added `"test": "vitest run"`, `"test:watch": "vitest"`, `"test:coverage": "vitest run --coverage"` scripts; added `"engines": { "node": ">=22.0.0" }`.
+
+**Node LTS migration** — upgraded all Node-related references from v20 to v22:
+- `frontend/Dockerfile`: `node:20-alpine` → `node:22-alpine`
+- `.github/workflows/ci.yml`: `node-version: "20"` → `"22"`; added `npm test` step before Build
+
+**CI frontend job final order:**
+1. `actions/setup-node@v4` (Node 22)
+2. `npm ci`
+3. `npm test` ← new
+4. `npm run build`
+5. `tsc --noEmit`
+
+**`CHANGELOG.md`** — created at repo root using Keep a Changelog format; covers all Added, Fixed, and Changed entries across all 23 interactions.
+
+### Corrections and redirections
+
+**vitest@4 + Node 18 incompatibility** — vitest@4 uses rolldown which requires `node:util.styleText`, only available in Node ≥ 20.12.0 (backport) / ≥ 20. Node 18.20.4 was the current local version. Attempted vitest@2 downgrade; user instead chose to upgrade Node to 24 LTS locally and migrate CI/Docker to Node 22 LTS. vitest and jsdom restored to latest (4.x / 29.x).
+
+### Acceptance criteria
+
+| Criterion | Result |
+|-----------|--------|
+| `frontend/src/test/` — 3 test files, 9 tests total | ✅ |
+| `vite.config.ts` has `test` block (jsdom, globals, setupFiles) | ✅ |
+| `package.json` scripts include `"test": "vitest run"` | ✅ |
+| `package.json` has `engines: { node: ">=22.0.0" }` | ✅ |
+| `frontend/Dockerfile` uses `node:22-alpine` | ✅ |
+| `.github/workflows/ci.yml` uses Node 22 + adds `npm test` step | ✅ |
+| `CHANGELOG.md` at repo root (Keep a Changelog format) | ✅ |
+| `docs/AI_INTERACTION_LOG.md` updated with Interaction 23 | ✅ |

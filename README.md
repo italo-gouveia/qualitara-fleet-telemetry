@@ -17,20 +17,21 @@ Real-time monitoring service for 50 autonomous industrial vehicles emitting tele
  │  • Vehicle upsert       ON CONFLICT     │
  │  • Fault → cancel       SELECT FOR UPD  │
  │  • Anomaly detection    sync, in-txn    │
- └────────────────────┬────────────────────┘
-                      │
-                      ▼
-            ┌──────────────────┐
-            │  PostgreSQL 16   │
-            │  telemetry_events│
-            │  vehicle_states  │
-            │  zone_counts     │
-            │  anomalies       │
-            │  missions        │
-            └──────────────────┘
-                      ▲
-          poll every 2 s (TanStack Query)
-                      │
+ │  • GET /metrics         Prometheus fmt  │
+ └──────┬─────────────────────────────────┘
+        │                        │ scrape /metrics
+        ▼                        ▼  every 15 s
+ ┌──────────────────┐   ┌─────────────────┐
+ │  PostgreSQL 16   │   │  Prometheus     │──── alert rules
+ │  telemetry_events│   │  (time-series)  │     HighErrorRate
+ │  vehicle_states  │   └────────┬────────┘     HighP95Latency
+ │  zone_counts     │            │ datasource    BackendDown
+ │  anomalies       │            ▼
+ │  missions        │   ┌─────────────────┐
+ └──────────────────┘   │  Grafana        │
+          ▲             │  auto-dashboard │
+  poll 2s │             │  (provisioned)  │
+          │             └─────────────────┘
  ┌─────────────────────────────────────────┐
  │       React 18 Dashboard (nginx)        │
  │  Fleet summary · Vehicle list           │
@@ -43,10 +44,14 @@ Real-time monitoring service for 50 autonomous industrial vehicles emitting tele
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.x async, Alembic, asyncpg |
+| Logging | `python-json-logger` — structured JSON in prod, text in dev; `X-Request-Id` propagation |
+| Metrics | `prometheus-fastapi-instrumentator` → Prometheus → Grafana (auto-provisioned) |
 | Database | PostgreSQL 16 (production / Docker) · SQLite + aiosqlite (tests) |
 | Frontend | React 18, TypeScript, Vite, TanStack Query v5 |
-| Tests | pytest-asyncio, httpx ASGITransport |
-| Container | Docker Compose (postgres:16-alpine + python:3.12-slim + nginx:alpine) |
+| Tests (backend) | pytest-asyncio, httpx ASGITransport — 60 tests |
+| Tests (frontend) | Vitest, Testing Library — component + hook render contracts |
+| Container | Docker Compose · full stack + optional Locust load-test profile |
+| CI | GitHub Actions — backend (pytest/ruff/mypy) + frontend (build/tsc/vitest) |
 
 ## How to Run
 
@@ -125,9 +130,14 @@ npm run dev
 
 ```bash
 cd backend
-pytest -v        # 23 integration tests (in-memory SQLite)
+pytest -v        # 60 tests: unit + integration (in-memory SQLite)
 ruff check .     # linting
 mypy app/        # type checking
+```
+
+```bash
+cd frontend
+npm test         # Vitest — component and hook render contracts
 ```
 
 ## API Endpoints
@@ -138,8 +148,10 @@ mypy app/        # type checking
 | `GET` | `/fleet/state` | Per-status vehicle counts |
 | `GET` | `/vehicles` | All known vehicles, ordered by ID — `?limit=1..100&offset=0` |
 | `GET` | `/vehicles/{id}` | Single vehicle state by ID (404 if unknown) |
+| `GET` | `/vehicles/{id}/missions` | Mission history for a vehicle, newest first — `?limit&offset` |
+| `GET` | `/vehicles/{id}/maintenance` | Maintenance records for a vehicle, newest first — `?limit&offset` |
 | `GET` | `/zones/counts` | Entry counts for all 20 zones |
-| `GET` | `/anomalies` | Anomalies — filters: `vehicle_id`, `start`, `end`, `limit` |
+| `GET` | `/anomalies` | Anomalies — filters: `vehicle_id`, `start`, `end`, `limit`, `offset` |
 | `PATCH` | `/vehicles/{id}/status` | Update vehicle status; cancels active mission on fault |
 | `GET` | `/health` | Liveness + DB readiness probe (503 if DB unreachable) |
 | `GET` | `/metrics` | Prometheus metrics (request count, latency histogram) |
@@ -164,7 +176,7 @@ Current design handles 50 vehicles at 1 Hz comfortably on a single PostgreSQL in
 | Zone counters | PostgreSQL row lock | Redis `INCR` (lock-free, sub-ms); periodic DB sync |
 | Fleet aggregate | Live `GROUP BY` on every poll | Materialized view refreshed every N seconds |
 | Dashboard delivery | HTTP polling every 2 s | Server-Sent Events or WebSocket + Redis Pub/Sub |
-| Anomaly detection | Synchronous, in-request | Dedicated consumer group; decouple from HTTP path |
+| Anomaly detection | Synchronous, in-request | **Step 1:** FastAPI `BackgroundTasks` (decouples from HTTP latency, zero new infra) → **Step 2:** Kafka/Redis Streams consumer group |
 | Database | Single Postgres instance | Read replicas for query endpoints; pgBouncer connection pool |
 
 Full analysis in [docs/ADR.md § What Would Change at 10× Scale](docs/ADR.md).
@@ -215,6 +227,9 @@ Explicitly out of scope — not oversights:
 | Zone geometry / collision detection | Spec delegates this to the edge client |
 | Historical time-series analytics | DB schema supports it; not required |
 | Multi-tenant / per-fleet isolation | Single fleet per deployment; spec is explicit |
+| Alertmanager / notification receivers | Alert rules defined; wiring Slack/PagerDuty is infra config, not code |
+| Background Tasks → Kafka | `BackgroundTasks` is the planned next step for anomaly detection; Kafka adds operational overhead without a scale trigger |
+| TestContainers | Would replace SQLite with real PostgreSQL in tests; deferred — adds Docker-in-Docker CI complexity without changing test semantics |
 
 ## Architecture Decisions
 
